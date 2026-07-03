@@ -1325,6 +1325,19 @@ struct osd_core_ops {
 	s32 (*macsec_tz_kt_config)(void *priv, u8 cmd,
 				   void *const kt_config,
 				   void *const genl_info);
+		/**
+		 * macsec_pn_event - Notify OSD about PN threshold/exhaustion.
+		 * @priv: OSD private data (ether_priv_data)
+		 * @sa_idx: SA index in hardware (0-31 TX, 0-95 RX)
+		 * @sc_idx: SC index (0-15 TX, 0-31 RX)
+		 * @event: 0=PN threshold, 1=PN exhausted
+		 * @ctlr: 0=TX controller, 1=RX controller
+		 *
+		 * Called from ISR context. The OSD layer sends a netlink
+		 * multicast event to userspace MKA daemon for key rotation.
+		 */
+		void (*macsec_pn_event)(void *priv, u32 sa_idx, u32 sc_idx,
+					u32 event, u32 ctlr);
 #endif /* MACSEC_SUPPORT */
 #ifdef OSI_DEBUG
 	/**.printf function callback */
@@ -1337,6 +1350,18 @@ struct osd_core_ops {
 };
 
 #ifdef MACSEC_SUPPORT
+/**
+ * @addtogroup MACSEC PN event types
+ *
+ * @brief PN event notification types passed to OSD layer
+ * @{
+ */
+/** PN threshold reached (early warning at ~75% of PN space) */
+#define OSI_MACSEC_PN_EVENT_THRESHOLD  0U
+/** PN exhausted - SA can no longer transmit, key rotation required */
+#define OSI_MACSEC_PN_EVENT_EXHAUSTED  1U
+/** @} */
+
 /**
  * @brief MACSEC secure channel basic information
  */

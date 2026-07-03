@@ -509,7 +509,7 @@ static s32 dwc_tx_sad_write(struct osi_core_priv_data *const osi_core,
 	/* TX_SAD_1_LOW: [31:16]SOFT_TTL [15:0]HARD_TTL (upper 16 bits each) */
 	{
 		u32 soft_ttl_hi = (DWC_DEFAULT_PN_THRESHOLD >> 16) & 0xFFFFU;
-		u32 hard_ttl_hi = 0xFFFFU; /* max PN = 0xFFFFFFFF */
+		u32 hard_ttl_hi = DWC_DEFAULT_PN_THRESHOLD;//0xFFFFU; /* max PN = 0xFFFFFFFF */
 		u32 sad1_low = (soft_ttl_hi << DWC_MACSEC_TX_SAD1L_SOFT_TTL_SHIFT) |
 				    (hard_ttl_hi << DWC_MACSEC_TX_SAD1L_HARD_TTL_SHIFT);
 		osi_writela(osi_core, sad1_low, base + DWC_MACSEC_TX_SAD_1_LOW);
@@ -1520,6 +1520,50 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
  * ============================================================ */
 
 #if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+/**
+ * @brief Read cached SAK from software lut_status for a key index.
+ *
+ * DWC_macsec KEY_x registers are write-only; hardware key readback is
+ * not supported.  Return the SAK cached in macsec_lut_status during
+ * SA creation, together with the H-key if MACSEC_KEY_PROGRAM is active.
+ */
+static s32 dwc_kt_read_cached(struct osi_core_priv_data *const osi_core,
+			      u16 index, u16 ctlr,
+			      struct osi_macsec_kt_config *const kt_config)
+{
+	struct osi_macsec_lut_status *lut_status;
+	u32 sa_per_sc;
+	u32 sc_idx;
+	u32 an;
+	u32 i;
+
+	sa_per_sc = (ctlr == OSI_CTLR_SEL_TX) ?
+		    DWC_MACSEC_TX_SA_PER_SC : DWC_MACSEC_RX_SA_PER_SC;
+	sc_idx = (u32)index / sa_per_sc;
+	an = (u32)index % sa_per_sc;
+
+	lut_status = &osi_core->macsec_lut_status[ctlr];
+	for (i = 0; i < OSI_MAX_NUM_SC; i++) {
+		if (lut_status->sc_info[i].an_valid == OSI_NONE)
+			continue;
+		if (lut_status->sc_info[i].sc_idx_start == sc_idx &&
+		    (lut_status->sc_info[i].an_valid & OSI_BIT(an))) {
+			osi_memcpy(kt_config->entry.sak,
+				   lut_status->sc_info[i].sak,
+				   OSI_KEY_LEN_256);
+#if defined(MACSEC_KEY_PROGRAM)
+			osi_memcpy(kt_config->entry.h,
+				   lut_status->sc_info[i].hkey,
+				   OSI_KEY_LEN_128);
+#endif
+			kt_config->flags |= OSI_LUT_FLAGS_ENTRY_VALID;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
 static s32 dwc_kt_config(struct osi_core_priv_data *const osi_core,
 			     struct osi_macsec_kt_config *const kt_config)
 {
@@ -1527,20 +1571,19 @@ static s32 dwc_kt_config(struct osi_core_priv_data *const osi_core,
 	u16 rw = kt_config->table_config.rw;
 	u16 index = kt_config->table_config.index;
 	u32 encrypt = (ctlr == OSI_CTLR_SEL_TX) ? 1U : 0U;
-	/* Use stored cipher setting: OSI_MACSEC_CIPHER_AES256 = 1 */
 	u32 key_len_256 = (osi_core->macsec_cipher ==
 				OSI_MACSEC_CIPHER_AES256) ? 1U : 0U;
 
 	if (rw != OSI_LUT_WRITE) {
-		/* DWC AES keys are write-only; reads not supported */
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "AES key read not supported\n", 0ULL);
-		return -1;
+		/* KEY_x registers are write-only; return cached SAK */
+		return dwc_kt_read_cached(osi_core, index, ctlr,
+					  kt_config);
 	}
 
 	if ((kt_config->flags & OSI_LUT_FLAGS_ENTRY_VALID) == OSI_NONE) {
 		/* Invalidate: write all zeros */
 		u8 zero_key[OSI_KEY_LEN_256] = {0};
+
 		return dwc_aes_key_program(osi_core, index, zero_key,
 					   0U, encrypt);
 	}
@@ -1549,7 +1592,6 @@ static s32 dwc_kt_config(struct osi_core_priv_data *const osi_core,
 				   key_len_256, encrypt);
 }
 #endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
-
 /* ============================================================
  * Cipher configuration
  * DWC_macsec selects cipher via AES_CTRL.KEY_SZ per key context,
@@ -1642,11 +1684,29 @@ static void dwc_handle_tx_sa_irq(struct osi_core_priv_data *const osi_core,
 	if ((stat & DWC_MACSEC_IRQ_TX_SA_PN_THR) != OSI_NONE) {
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.tx_pn_threshold);
 		MACSEC_LOG("TX SA %u: PN threshold reached\n", sa_idx);
+		if (osi_core->osd_ops.macsec_pn_event != OSI_NULL) {
+			u32 sc_idx = sa_idx / DWC_MACSEC_TX_SA_PER_SC;
+
+			osi_core->osd_ops.macsec_pn_event(
+				osi_core->osd,
+				sa_idx, sc_idx,
+				OSI_MACSEC_PN_EVENT_THRESHOLD,
+				OSI_CTLR_SEL_TX);
+		}
 	}
 
 	if ((stat & DWC_MACSEC_IRQ_TX_SA_PN_EXHAUST) != OSI_NONE) {
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.tx_pn_exhausted);
 		MACSEC_LOG("TX SA %u: PN exhausted\n", sa_idx);
+		if (osi_core->osd_ops.macsec_pn_event != OSI_NULL) {
+			u32 sc_idx = sa_idx / DWC_MACSEC_TX_SA_PER_SC;
+
+			osi_core->osd_ops.macsec_pn_event(
+				osi_core->osd,
+				sa_idx, sc_idx,
+				OSI_MACSEC_PN_EVENT_EXHAUSTED,
+				OSI_CTLR_SEL_TX);
+		}
 	}
 
 	if ((stat & DWC_MACSEC_IRQ_TX_SA_TOO_LONG) != OSI_NONE) {
@@ -1686,6 +1746,8 @@ static void dwc_handle_rx_sa_irq(struct osi_core_priv_data *const osi_core,
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.rx_replay_error);
 		MACSEC_LOG("RX SA %u: Post-replay check failed\n", sa_idx);
 	}
+
+	
 
 	if ((stat & DWC_MACSEC_IRQ_RX_SA_BAD_SECTAG) != OSI_NONE) {
 		MACSEC_LOG("RX SA %u: Bad SecTAG\n", sa_idx);
@@ -1747,7 +1809,7 @@ static void dwc_handle_aes_irq(struct osi_core_priv_data *const osi_core)
 	/* W1C: clear all handled AES interrupts */
 	osi_writela(osi_core, stat, base + DWC_AES_IRQ_STAT);
 }
-#endif /* MACSEC_KEY_PROGRAM || MACSEC_STANDARD_SUPPORT */
+#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
 
 static void dwc_handle_irq(struct osi_core_priv_data *const osi_core)
 {
@@ -1787,7 +1849,7 @@ static void dwc_handle_irq(struct osi_core_priv_data *const osi_core)
 #if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
 	/* Handle AES APB domain interrupts (tz_base) */
 	dwc_handle_aes_irq(osi_core);
-#endif /* MACSEC_KEY_PROGRAM || MACSEC_STANDARD_SUPPORT */
+#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
 }
 
 /* ============================================================
@@ -1868,11 +1930,22 @@ static s32 dwc_set_bypass_entries(struct osi_core_priv_data *const osi_core)
 	u8 *base = (u8 *)osi_core->macsec_base;
 	u32 val;
 
-	/* Configure ethertype bypass filter for EAPoL-MKA frames (0x888E)
-	 * so MACsec key agreement can proceed when MACsec is active.
-	 * ETHERTYPE_FILTER_0: [15:0] = ethertype_0 = 0x888E
+	/* Ethertype bypass filters: frames matching these ethertypes
+	 * pass through without MACsec processing. Required per
+	 * IEEE 802.1AE-2018 section 9.3.1 (PAUSE/Slow Protocol/EAPoL
+	 * shall not be MACsec-protected).
+	 *
+	 * ETHERTYPE_FILT_0: 0x888E = EAPoL (MKA key agreement)
+	 * ETHERTYPE_FILT_1: 0x8809 = Slow Protocols
+	 *   (PAUSE 0x0001, LACP 0x0002, OAM 0x0003, MRP 0x000E)
+	 * ETHERTYPE_FILT_2: 0x88CC = LLDP
 	 */
-	osi_writela(osi_core, 0x888EU, base + DWC_MACSEC_ETHERTYPE_FILT(0));
+	osi_writela(osi_core, 0x888EU,
+		    base + DWC_MACSEC_ETHERTYPE_FILT(0));
+	osi_writela(osi_core, 0x8809U,
+		    base + DWC_MACSEC_ETHERTYPE_FILT(1));
+	osi_writela(osi_core, 0x88CCU,
+		    base + DWC_MACSEC_ETHERTYPE_FILT(2));
 
 	/* Enable ethertype filter in IP_CONTROL */
 	val = osi_readla(osi_core, base + DWC_MACSEC_IP_CONTROL);
@@ -2378,10 +2451,19 @@ static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 	val = osi_readla(osi_core, base + DWC_MACSEC_IP_CONTROL);
 	MACSEC_LOG("Read IP_CONTROL: 0x%x\n", val);
 
-	/* Keep bypass active during init, will be enabled later */
-	val |= DWC_MACSEC_CTRL_TX_BYPASS | DWC_MACSEC_CTRL_RX_BYPASS;
+	/* Hardware default: bypass=0 (MACsec active). With empty SAI/SAD
+	 * tables and MIB_VALIDATE=NOT_STRICT, all frames lookup-miss
+	 * -> bypassed. Encryption starts when first SA is added. */
+	//val |= DWC_MACSEC_CTRL_TX_BYPASS | DWC_MACSEC_CTRL_RX_BYPASS;
 	/* Clear XPN selection */
 	val &= ~DWC_MACSEC_CTRL_XPNSEL;
+	/* VLANMODE = 000 (not on the clear):
+	 * VLAN tags are encrypted and authenticated together
+	 * with the payload. No VLAN info in the clear.
+	 */
+	val &= ~DWC_MACSEC_CTRL_VLANMODE_MASK;
+	val |= (DWC_MACSEC_VLANMODE_NOT_ON_CLEAR <<
+		DWC_MACSEC_CTRL_VLANMODE_SHIFT);
 
 	osi_writela(osi_core, val, base + DWC_MACSEC_IP_CONTROL);
 

@@ -926,6 +926,9 @@ void ether_assign_osd_ops(struct osi_core_priv_data *osi_core,
 	osi_core->osd_ops.printf = osd_core_printf;
 #endif
 	osi_core->osd_ops.restart_lane_bringup = osd_restart_lane_bringup;
+#ifdef MACSEC_SUPPORT
+	osi_core->osd_ops.macsec_pn_event = macsec_pn_event_handler;
+#endif /* MACSEC_SUPPORT */
 	osi_dma->osd_ops.transmit_complete = osd_transmit_complete;
 	osi_dma->osd_ops.receive_packet = osd_receive_packet;
 	osi_dma->osd_ops.realloc_buf = osd_realloc_buf;

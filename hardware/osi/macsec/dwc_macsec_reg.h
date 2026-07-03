@@ -183,14 +183,22 @@
 #define DWC_MACSEC_CTRL_VLANMODE_SHIFT		29
 #define DWC_MACSEC_CTRL_VLANMODE_MASK		(0x7U << 29)
 #define DWC_MACSEC_CTRL_PNSE_CHECK_EN		OSI_BIT(28)
-#define DWC_MACSEC_CTRL_KAY_DROP_EN		OSI_BIT(15)
-#define DWC_MACSEC_CTRL_ETHERTYPE_FILT_EN	OSI_BIT(14)
+#define DWC_MACSEC_CTRL_KAY_DROP_EN		OSI_BIT(11)
+#define DWC_MACSEC_CTRL_ETHERTYPE_FILT_EN	OSI_BIT(10)
 #define DWC_MACSEC_CTRL_DATA_MODE_SHIFT		5
 #define DWC_MACSEC_CTRL_DATA_MODE_MASK		(0x1FU << 5)
 #define DWC_MACSEC_CTRL_RX_BYPASS		OSI_BIT(4)
 #define DWC_MACSEC_CTRL_TX_BYPASS		OSI_BIT(3)
-#define DWC_MACSEC_CTRL_USGMII			OSI_BIT(1)
+#define DWC_MACSEC_CTRL_USGMII			OSI_BIT(2)
 #define DWC_MACSEC_CTRL_XPNSEL			OSI_BIT(0)
+/** @brief VLANMODE values for MACsec_IP_Control [31:29] */
+#define DWC_MACSEC_VLANMODE_NOT_ON_CLEAR	0x0U
+#define DWC_MACSEC_VLANMODE_ON_CLEAR		0x1U
+#define DWC_MACSEC_VLANMODE_DUAL_COPY		0x2U
+#define DWC_MACSEC_VLANMODE_CTOS_REPLACE	0x3U
+#define DWC_MACSEC_VLANMODE_STAG_COPY		0x4U
+#define DWC_MACSEC_VLANMODE_STAG_CLEAR		0x5U
+#define DWC_MACSEC_VLANMODE_CTAG_COPY		0x6U
 /** @} */
 
 /* ============================================================
@@ -478,7 +486,7 @@
 /** @} */
 
 /** @addtogroup DWC_AES_CONFIG bit fields (0x10)
- * Databook 6.2.3 ¡ª all fields are read-only HW configuration
+ * Databook 6.2.3 ï¿½ï¿½ all fields are read-only HW configuration
  * @{ */
 #define DWC_AES_CONFIG_NUM_CTX_SHIFT	15
 #define DWC_AES_CONFIG_NUM_CTX_MASK	(0x1FFFFU << 15)
@@ -507,7 +515,7 @@
 /** @} */
 
 /** @addtogroup DWC_AES_STAT bit fields (0x18)
- * Databook 6.2.5 ¡ª only BUSY bit
+ * Databook 6.2.5 ï¿½ï¿½ only BUSY bit
  * @{ */
 #define DWC_AES_STAT_BUSY		OSI_BIT(0)
 /** @} */
@@ -520,14 +528,14 @@
 /** @} */
 
 /** @addtogroup DWC_AES_FIPS_SELF_TEST_CTL bit fields (0x50)
- * Databook 6.2.15 ¡ª Exists when DWC_MACSEC_AES_FIPS_EN==1
+ * Databook 6.2.15 ï¿½ï¿½ Exists when DWC_MACSEC_AES_FIPS_EN==1
  * @{ */
 #define DWC_AES_FIPS_CTL_CHECK		OSI_BIT(1)
 #define DWC_AES_FIPS_CTL_ENA		OSI_BIT(0)
 /** @} */
 
 /** @addtogroup DWC_AES_FIPS_SELF_TEST_STAT bit fields (0x58)
- * Databook 6.2.17 ¡ª all W1C
+ * Databook 6.2.17 ï¿½ï¿½ all W1C
  * @{ */
 #define DWC_AES_FIPS_STAT_FAIL_CAUSE_MASK	(0x7FU << 4)
 #define DWC_AES_FIPS_STAT_MAC_MATCH_RES		OSI_BIT(2)

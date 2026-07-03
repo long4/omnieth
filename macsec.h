@@ -46,9 +46,9 @@
 
 #define OB_MACSEC_GENL_VERSION	1
 
-#ifdef MACSEC_KEY_PROGRAM
+#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
 #define MACSEC_SIZE 0x10000U
-#endif
+#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
 
 #define KEY2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5],\
 		   (a)[6], (a)[7], (a)[8], (a)[9], (a)[10], (a)[11],\
@@ -282,6 +282,8 @@ struct macsec_priv_data {
 };
 
 int macsec_probe(struct ether_priv_data *pdata);
+void macsec_pn_event_handler(void *priv, u32 sa_idx, u32 sc_idx,
+			      u32 event, u32 ctlr);
 int macsec_coe_config(struct macsec_priv_data *macsec_pdata,
 		uint32_t coe_enable, uint32_t coe_hdr_offset);
 int macsec_coe_lc(struct macsec_priv_data *macsec_pdata,

@@ -18,6 +18,8 @@ static bool macsec_enable = true;
 module_param(macsec_enable, bool, 0644);
 MODULE_PARM_DESC(macsec_enable, "Enable Macsec for omnieth module");
 
+#define OB_MACSEC_GENL_MC_GRP_EVENTS "events"
+
 int macsec_get_tx_next_pn(struct sk_buff *skb, struct genl_info *info);
 
 #ifndef MACSEC_KEY_PROGRAM
@@ -35,6 +37,64 @@ static irqreturn_t macsec_s_isr(int irq, void *data)
 	osi_macsec_isr(pdata->osi_core);
 
 	return IRQ_HANDLED;
+}
+
+/**
+ * macsec_pn_event_handler - OSI -> OSD callback for PN threshold/exhaustion.
+ *
+ * Called from the OSI MACsec ISR (hardirq context). Sends a genl multicast
+ * notification to userspace MKA daemon listing on the "events" mc group.
+ *
+ * @priv: OSD private data (ether_priv_data *)
+ * @sa_idx: hardware SA index (0-31 TX)
+ * @sc_idx: SC index derived from SA index
+ * @event: OSI_MACSEC_PN_EVENT_THRESHOLD or OSI_MACSEC_PN_EVENT_EXHAUSTED
+ * @ctlr: OSI_CTLR_SEL_TX or OSI_CTLR_SEL_RX
+ */
+static void macsec_pn_event_handler(void *priv, u32 sa_idx, u32 sc_idx,
+				    u32 event, u32 ctlr)
+{
+	struct ether_priv_data *pdata = (struct ether_priv_data *)priv;
+	struct macsec_priv_data *macsec_pdata = pdata->macsec_pdata;
+	struct sk_buff *skb;
+	void *hdr;
+
+	if (!macsec_pdata || !macsec_pdata->is_ob_macsec_fam_registered)
+		return;
+
+	skb = genlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
+	if (!skb)
+		return;
+
+	hdr = genlmsg_put(skb, 0, 0, &macsec_pdata->ob_macsec_fam, 0, 0,
+			  OB_MACSEC_CMD_PN_EVENT, OB_MACSEC_GENL_VERSION);
+	if (!hdr) {
+		nlmsg_free(skb);
+		return;
+	}
+
+	if (nla_put_string(skb, OB_MACSEC_PN_EVENT_ATTR_IFNAME,
+			   netdev_name(pdata->ndev)) ||
+	    nla_put_u32(skb, OB_MACSEC_PN_EVENT_ATTR_CTLR, ctlr) ||
+	    nla_put_u32(skb, OB_MACSEC_PN_EVENT_ATTR_SA_IDX, sa_idx) ||
+	    nla_put_u32(skb, OB_MACSEC_PN_EVENT_ATTR_SC_IDX, sc_idx) ||
+	    nla_put_u32(skb, OB_MACSEC_PN_EVENT_ATTR_EVENT_TYPE, event)) {
+		nlmsg_free(skb);
+		return;
+	}
+
+	genlmsg_end(skb, hdr);
+
+	genlmsg_multicast(&macsec_pdata->ob_macsec_fam, skb, 0,
+			  0, GFP_ATOMIC);
+
+	dev_info(pdata->dev,
+		 "%s: PN event sent: ctlr=%s sa=%u sc=%u event=%s
+",
+		 __func__,
+		 (ctlr == OSI_CTLR_SEL_TX) ? "TX" : "RX",
+		 sa_idx, sc_idx,
+		 (event == OSI_MACSEC_PN_EVENT_EXHAUSTED) ? "exhausted" : "threshold");
 }
 
 #ifdef HSI_SUPPORT
@@ -434,6 +494,11 @@ static struct macsec_priv_data *genl_to_macsec_pdata(struct genl_info *info)
 
 	PRINT_ENTRY();
 
+	if (!attrs || !attrs[OB_MACSEC_ATTR_IFNAME]) {
+		pr_err("%s: missing IFNAME attribute\n", __func__);
+		goto exit;
+	}
+
 	nla_strscpy(ifname, attrs[OB_MACSEC_ATTR_IFNAME], sizeof(ifname));
 	ndev = dev_get_by_name(genl_info_net(info),
 			       ifname);
@@ -630,7 +695,9 @@ int macsec_dis_rx_sa(struct sk_buff *skb, struct genl_info *info)
 		rx_sa.sci[0], rx_sa.sci[1], rx_sa.sci[2], rx_sa.sci[3],
 		rx_sa.sci[4], rx_sa.sci[5], rx_sa.sci[6], rx_sa.sci[7],
 		rx_sa.curr_an, rx_sa.next_pn);
+#ifdef DEBUG_MACSEC
 	dev_info(dev, "\tkey: " KEYSTR, KEY2STR(rx_sa.sak));
+#endif /* DEBUG_MACSEC */
 
 	rx_sa.vlan_in_clear = macsec_pdata->vlan_in_clear;
 	mutex_lock(&macsec_pdata->lock);
@@ -740,6 +807,9 @@ int macsec_create_rx_sa(struct sk_buff *skb, struct genl_info *info)
 
 	rx_sa.pn_window = macsec_pdata->pn_window;
 	rx_sa.vlan_in_clear = macsec_pdata->vlan_in_clear;
+#ifdef CONFIG_MACSEC
+	rx_sa.validate_frames = macsec_pdata->validate_frames;
+#endif /* CONFIG_MACSEC */
 	dev_info(dev, "%s:\n"
 		"\tsci: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n"
 		"\tan: %u\n"
@@ -750,7 +820,9 @@ int macsec_create_rx_sa(struct sk_buff *skb, struct genl_info *info)
 		rx_sa.sci[0], rx_sa.sci[1], rx_sa.sci[2], rx_sa.sci[3],
 		rx_sa.sci[4], rx_sa.sci[5], rx_sa.sci[6], rx_sa.sci[7],
 		rx_sa.curr_an, rx_sa.next_pn, rx_sa.lowest_pn, rx_sa.pn_window);
+#ifdef DEBUG_MACSEC
 	dev_info(dev, "\tkey: " KEYSTR, KEY2STR(rx_sa.sak));
+#endif /* DEBUG_MACSEC */
 
 #ifdef MACSEC_KEY_PROGRAM
 	ret = hkey_generation(rx_sa.sak, rx_sa.hkey);
@@ -897,7 +969,9 @@ int macsec_dis_tx_sa(struct sk_buff *skb, struct genl_info *info)
 		tx_sa.sci[0], tx_sa.sci[1], tx_sa.sci[2], tx_sa.sci[3],
 		tx_sa.sci[4], tx_sa.sci[5], tx_sa.sci[6], tx_sa.sci[7],
 		tx_sa.curr_an, tx_sa.next_pn);
+#ifdef DEBUG_MACSEC
 	dev_info(dev, "\tkey: " KEYSTR, KEY2STR(tx_sa.sak));
+#endif /* DEBUG_MACSEC */
 
 	tx_sa.vlan_in_clear = macsec_pdata->vlan_in_clear;
 	mutex_lock(&macsec_pdata->lock);
@@ -982,7 +1056,9 @@ int macsec_create_tx_sa(struct sk_buff *skb, struct genl_info *info)
 		tx_sa.sci[0], tx_sa.sci[1], tx_sa.sci[2], tx_sa.sci[3],
 		tx_sa.sci[4], tx_sa.sci[5], tx_sa.sci[6], tx_sa.sci[7],
 		tx_sa.curr_an, tx_sa.next_pn);
+#ifdef DEBUG_MACSEC
 	dev_info(dev, "\tkey: " KEYSTR, KEY2STR(tx_sa.sak));
+#endif /* DEBUG_MACSEC */
 
 #ifdef MACSEC_KEY_PROGRAM
 	tx_sa.flags = OSI_CREATE_SA;
@@ -1368,7 +1444,7 @@ static int omni_macsec_validate_secy(const struct macsec_secy *secy)
 		return -EOPNOTSUPP;
 	if (secy->protect_frames && !secy->tx_sc.encrypt)
 		return -EOPNOTSUPP;
-	if (secy->validate_frames != MACSEC_VALIDATE_STRICT)
+	if (secy->validate_frames > MACSEC_VALIDATE_STRICT)
 		return -EOPNOTSUPP;
 
 	return 0;
@@ -1606,8 +1682,6 @@ static int omni_macsec_get_sc_index(struct ether_priv_data *pdata,
 {
 	struct osi_macsec_lut_status *lut_status;
 	u32 i;
-	u32 key_index = 0;
-	int ret;
 
 	if ((pdata == NULL) || (pdata->osi_core == NULL) || (sci == NULL) ||
 	    (sc_idx == NULL) || (ctlr > OSI_CTLR_SEL_MAX))
@@ -1625,14 +1699,7 @@ static int omni_macsec_get_sc_index(struct ether_priv_data *pdata,
 		}
 	}
 
-	ret = osi_macsec_get_sc_lut_key_index(pdata->osi_core, (u8 *)sci,
-					      &key_index, ctlr);
-	if (ret < 0)
-		return ret;
-
-	*sc_idx = key_index / DWC_MACSEC_TX_SA_PER_SC;
-
-	return 0;
+	return -ENOENT;
 }
 
 static struct osi_macsec_sc_info *
@@ -2331,6 +2398,10 @@ static const struct macsec_ops omni_macsec_ops = {
 };
 #endif /* CONFIG_MACSEC */
 
+static const struct genl_multicast_group macsec_genl_mcgrps[] = {
+	{ .name = OB_MACSEC_GENL_MC_GRP_EVENTS },
+};
+
 static const struct genl_ops ob_macsec_genl_ops[] = {
 	{
 		.cmd = OB_MACSEC_CMD_INIT,
@@ -2578,6 +2649,8 @@ int macsec_probe(struct ether_priv_data *pdata)
 	macsec_pdata->ob_macsec_fam.ops = ob_macsec_genl_ops;
 	macsec_pdata->ob_macsec_fam.n_ops = ARRAY_SIZE(ob_macsec_genl_ops);
 	macsec_pdata->ob_macsec_fam.policy = ob_macsec_genl_policy;
+	macsec_pdata->ob_macsec_fam.mcgrps = macsec_genl_mcgrps;
+	macsec_pdata->ob_macsec_fam.n_mcgrps = ARRAY_SIZE(macsec_genl_mcgrps);
 	if (macsec_pdata->is_ob_macsec_fam_registered == OSI_DISABLE) {
 		if (strlen(netdev_name(pdata->ndev)) >= GENL_NAMSIZ) {
 			dev_err(dev, "Intf name %s of len %lu exceed nl_family name size\n",

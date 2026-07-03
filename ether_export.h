@@ -210,6 +210,25 @@ enum ob_macsec_nl_commands {
 	OB_MACSEC_CMD_TZ_KT_RESET,
 	/** MACSEC netlink command to de-initialize the MACSEC HW */
 	OB_MACSEC_CMD_DEINIT,
+	/** MACSEC PN event multicast notification (driver→userspace) */
+	OB_MACSEC_CMD_PN_EVENT,
+};
+
+/** @brief MACsec PN event notification attributes (multicast) */
+enum ob_macsec_pn_event_attrs {
+	OB_MACSEC_PN_EVENT_ATTR_UNSPEC,
+	/** interface name (NLA_STRING) */
+	OB_MACSEC_PN_EVENT_ATTR_IFNAME,
+	/** controller: 0=TX, 1=RX (NLA_U32) */
+	OB_MACSEC_PN_EVENT_ATTR_CTLR,
+	/** SA index (NLA_U32) */
+	OB_MACSEC_PN_EVENT_ATTR_SA_IDX,
+	/** SC index (NLA_U32) */
+	OB_MACSEC_PN_EVENT_ATTR_SC_IDX,
+	/** event type: 0=threshold, 1=exhausted (NLA_U32) */
+	OB_MACSEC_PN_EVENT_ATTR_EVENT_TYPE,
+	__OB_MACSEC_PN_EVENT_ATTR_END,
+	NUM_OB_MACSEC_PN_EVENT_ATTR = __OB_MACSEC_PN_EVENT_ATTR_END - 1,
 };
 
 #endif /* ETHER_EXPORT_H */
