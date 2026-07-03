@@ -1436,8 +1436,8 @@ static int omni_macsec_validate_secy(const struct macsec_secy *secy)
 {
 	if (secy == NULL)
 		return -EINVAL;
-	if (secy->xpn)
-		return -EOPNOTSUPP;
+	/* XPN is supported: DWC IP always has XPNSEL=1 in IP_CONTROL,
+	 * SSCI and SALT table are programmed in dwc_macsec.c from SCI. */
 	if (secy->icv_len != MACSEC_DEFAULT_ICV_LEN)
 		return -EOPNOTSUPP;
 	if (secy->tx_sc.scb)
@@ -1954,7 +1954,7 @@ static int omni_macsec_populate_tx_sa(struct macsec_context *ctx,
 #endif
 	}
 
-	/* DWC_macsec supports only 2 SA per SC (AN 0 and 1) */
+	/* DWC IP supports up to 4 SA per SC on RX, 2 on TX */
 	if (ctx->sa.assoc_num > 1)
 		return -EOPNOTSUPP;
 
@@ -1964,6 +1964,16 @@ static int omni_macsec_populate_tx_sa(struct macsec_context *ctx,
 	tx_sa->lowest_pn_hi = 0U;
 	tx_sa->pn_window = OSI_PN_MAX_DEFAULT;
 	tx_sa->flags = flags;
+
+	/* XPN: propagate kernel ssci/salt. DWC IP always has XPNSEL=1,
+	 * SALT table is programmed in dwc_macsec.c. For XPN-enabled
+	 * secy, ssci is set by the kernel MKA daemon.
+	 */
+	if (ctx->secy->xpn) {
+		tx_sa->xpn = OSI_ENABLE;
+		tx_sa->ssci = ctx->secy->ssci;
+		memcpy(tx_sa->salt, ctx->secy->salt, sizeof(tx_sa->salt));
+	}
 
 	return 0;
 }
@@ -1997,8 +2007,8 @@ static int omni_macsec_populate_rx_sa(struct macsec_context *ctx,
 #endif
 	}
 
-	/* DWC_macsec supports only 2 SA per SC (AN 0 and 1) */
-	if (ctx->sa.assoc_num > 1)
+	/* DWC IP: TX 2 SA/SC, RX 4 SA/SC */
+	if (ctx->sa.assoc_num > 3)
 		return -EOPNOTSUPP;
 
 	rx_sa->curr_an = ctx->sa.assoc_num;
@@ -2012,6 +2022,13 @@ static int omni_macsec_populate_rx_sa(struct macsec_context *ctx,
 		rx_sa->pn_window = OSI_PN_MAX_DEFAULT;
 	rx_sa->flags = flags;
 	rx_sa->validate_frames = ctx->secy->validate_frames;
+
+	/* XPN: propagate kernel ssci/salt. DWC IP always has XPNSEL=1. */
+	if (ctx->secy->xpn) {
+		rx_sa->xpn = OSI_ENABLE;
+		rx_sa->ssci = ctx->secy->ssci;
+		memcpy(rx_sa->salt, ctx->secy->salt, sizeof(rx_sa->salt));
+	}
 
 	return 0;
 }

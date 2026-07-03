@@ -176,7 +176,7 @@ struct ivc_msg_common;
  * @brief Maximum number of Secure Channels
  */
 #define OSI_MAX_NUM_SC                  32U
-#define OSI_MAX_NUM_SC_T26x		48U
+#define OSI_MAX_NUM_SC_T26x		128U
 /**
  * @brief MACSEC Secure Channel Identifier length
  */
@@ -1414,19 +1414,23 @@ struct osi_macsec_sc_info {
 	/** Peer MACID is stored
 	 * valid values are from 0 to UINT8_MAX */
 	u8 peer_macid[OSI_ETH_ALEN];
+	/** XPN Extended Packet Numbering — required by DWC IP in hardware.
+	 * Both CONFIG_MACSEC kernel offload and MACSEC_KEY_PROGRAM private
+	 * genl paths program SALT/SSCI/SAD XPN fields.
+	 */
+	/** Upper 32 bits of next PN (XPN mode, 0 for non-XPN) */
+	u32 next_pn_hi;
+	/** Upper 32 bits of lowest PN (XPN mode, 0 for non-XPN) */
+	u32 lowest_pn_hi;
+	/** Short SCI (32-bit, SCI[4:8] || SCI[0:4] per IEEE 802.1AE) */
+	u32 ssci;
+	/** 96-bit SSCI for SALT table programming */
+	u8 salt[12];
+	/** XPN mode: OSI_ENABLE (1) or OSI_DISABLE (0) */
+	u32 xpn;
 #ifdef CONFIG_MACSEC
 	/** SAK key length (16 for AES-128, 32 for AES-256) */
 	u32 key_len;
-	/** Upper 32 bits of next PN (XPN mode, unused for non-XPN) */
-	u32 next_pn_hi;
-	/** Upper 32 bits of lowest PN (XPN mode, unused for non-XPN) */
-	u32 lowest_pn_hi;
-	/** Short SCI for XPN (unused for non-XPN) */
-	u32 ssci;
-	/** Salt for XPN (unused for non-XPN) */
-	u8 salt[12];
-	/** XPN mode enable/disable */
-	u32 xpn;
 	/** Frame validation mode */
 	u32 validate_frames;
 #endif /* CONFIG_MACSEC */

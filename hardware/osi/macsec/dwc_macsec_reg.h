@@ -12,22 +12,31 @@
 #define INCLUDED_DWC_MACSEC_REG_H
 
 /* ============================================================
- * DWC_macsec Hardware Configuration (from 1.05a)
+ * DWC_macsec Hardware Configuration (from ComponentConfiguration)
  * ============================================================
  * TX SC: 16, TX SA per SC: 2, Total TX SA: 32
- * RX SC: 32, RX SA per SC: 2, Total RX SA: 64
- * Max Key: AES-256, XPN: disabled
+ * RX SC: 128, RX SA per SC: 4, Total RX SA: 512
+ * Max Key: AES-256, XPN: enabled
  * Anti-Replay Window: Logarithmic
- * AES Key Contexts: 98
+ * AES Key Contexts: 546 (TX 32 + RX 512 + FIPS 1 + SPARE 1)
+ * Perf Rate: up to 25Gbps, Dual-IF: enabled
+ * Data Interface: XLGMII (128-bit)
  * ============================================================ */
 
 #define DWC_MACSEC_TX_MAX_SC		16U
 #define DWC_MACSEC_TX_SA_PER_SC		2U
 #define DWC_MACSEC_TX_MAX_SA		32U
-#define DWC_MACSEC_RX_MAX_SC		32U
-#define DWC_MACSEC_RX_SA_PER_SC		2U
-#define DWC_MACSEC_RX_MAX_SA		64U
-#define DWC_MACSEC_AES_KEY_CTX		98U
+#define DWC_MACSEC_RX_MAX_SC		128U
+#define DWC_MACSEC_RX_SA_PER_SC		4U
+#define DWC_MACSEC_RX_MAX_SA		512U
+#define DWC_MACSEC_AES_KEY_CTX		546U
+
+/* TX SALT entries (XPN): one per TX SA, depth = DWC_MACSEC_TX_MAX_SA */
+#define DWC_MACSEC_TX_SALT_MAX		32U
+/* RX SALT entries (XPN): one per RX SA, depth = DWC_MACSEC_RX_MAX_SA */
+#define DWC_MACSEC_RX_SALT_MAX		512U
+/* RX ARW entries: one per RX SA */
+#define DWC_MACSEC_RX_ARW_MAX		512U
 
 /* ============================================================
  * TCAM vs Internal FFs mode selection
@@ -106,6 +115,8 @@
 /** @} */
 
 /** @addtogroup DWC_MACSEC TX SALT table registers (XPN-related)
+ * SALT table depth = DWC_MACSEC_TX_SALT_MAX (32 entries).
+ * Each entry holds a 96-bit SSCI (across TABLE_0/1/2).
  * @{ */
 #define DWC_MACSEC_TX_SALT_PG		0xA0
 #define DWC_MACSEC_TX_SALT_PRG		0xA4
@@ -113,6 +124,25 @@
 #define DWC_MACSEC_TX_SALT_TABLE_0	0xAC
 #define DWC_MACSEC_TX_SALT_TABLE_1	0xB0
 #define DWC_MACSEC_TX_SALT_TABLE_2	0xB4
+/** @} */
+
+/** @addtogroup DWC_MACSEC RX SALT table registers (XPN-related)
+ * SALT table depth = DWC_MACSEC_RX_SALT_MAX (512 entries).
+ * Each entry holds a 96-bit SSCI (across TABLE_0/1/2).
+ * @{ */
+#define DWC_MACSEC_RX_SALT_PG		0x88
+#define DWC_MACSEC_RX_SALT_PRG		0x8C
+#define DWC_MACSEC_RX_SALT_DATA_FETCH	0x90
+#define DWC_MACSEC_RX_SALT_TABLE_0	0x94
+#define DWC_MACSEC_RX_SALT_TABLE_1	0x98
+#define DWC_MACSEC_RX_SALT_TABLE_2	0x9C
+/** @} */
+
+/** @addtogroup DWC_MACSEC SALT PRG bit fields (shared TX/RX)
+ * @{ */
+#define DWC_MACSEC_SALT_PRG_TYPE_WRITE		OSI_BIT(0)
+#define DWC_MACSEC_SALT_PRG_TYPE_READ		0U
+#define DWC_MACSEC_SALT_PRG_ENTRY_SHIFT		1
 /** @} */
 
 /** @addtogroup DWC_MACSEC RX Anti-Replay Window (ARW) registers
@@ -199,6 +229,31 @@
 #define DWC_MACSEC_VLANMODE_STAG_COPY		0x4U
 #define DWC_MACSEC_VLANMODE_STAG_CLEAR		0x5U
 #define DWC_MACSEC_VLANMODE_CTAG_COPY		0x6U
+
+/** @brief DATA_MODE values for MACsec_IP_Control [9:5]
+ *
+ * Encodes the data interface type and speed. Used with Dual-IF
+ * to select GMII vs XLGMII at boot time.
+ */
+#define DWC_MACSEC_DATA_MODE_GMII_1G		0x00U  /* 8-bit GMII, 1Gbps */
+#define DWC_MACSEC_DATA_MODE_GMII_2P5G		0x01U  /* 8-bit GMII, 2.5Gbps */
+#define DWC_MACSEC_DATA_MODE_XGMII_10G		0x02U  /* 64-bit XGMII, 10Gbps */
+#define DWC_MACSEC_DATA_MODE_XLGMII_25G		0x04U  /* 128-bit XLGMII, 25Gbps */
+#define DWC_MACSEC_DATA_MODE_XLGMII_50G		0x05U  /* 128-bit XLGMII, 50Gbps */
+#define DWC_MACSEC_DATA_MODE_XLGMII_100G	0x06U  /* 128-bit XLGMII, 100Gbps */
+
+/** @brief IP_CONTROL default value for 25G XLGMII with XPN, no bypass
+ *
+ * Composes: VLANMODE not-on-clear, ethertype filter, DATA_MODE 25G,
+ *           TX/RX bypass cleared (MACsec active), XPN enabled.
+ */
+#define DWC_MACSEC_IP_CONTROL_DEFAULT				\
+	((DWC_MACSEC_VLANMODE_NOT_ON_CLEAR <<			\
+	  DWC_MACSEC_CTRL_VLANMODE_SHIFT) |			\
+	 DWC_MACSEC_CTRL_ETHERTYPE_FILT_EN |			\
+	 (DWC_MACSEC_DATA_MODE_XLGMII_25G <<			\
+	  DWC_MACSEC_CTRL_DATA_MODE_SHIFT) |			\
+	 DWC_MACSEC_CTRL_XPNSEL)
 /** @} */
 
 /* ============================================================
@@ -271,6 +326,22 @@
 #define DWC_MACSEC_TX_SAD1H_MTU_MASK		0x3FFFU
 
 /* ============================================================
+ * TX SAD XPN fields (0xE4-0xF0)
+ * Used when DWC_MACSEC_CTRL_XPNSEL is set in IP_CONTROL.
+ * ============================================================ */
+
+/** @addtogroup TX SAD XPN fields
+ * TX_SAD_2_LOW  (0xE4): SSCI[31:0]
+ * TX_SAD_2_HIGH (0xE8): SSCI[63:32]
+ * TX_SAD_3_LOW  (0xEC): [31:16]reserved [15:0]SALT_IDX
+ * TX_SAD_3_HIGH (0xF0): [31:1]reserved [0]XPN_CIPHER_SUITE
+ * @{ */
+#define DWC_MACSEC_TX_SAD3L_SALT_IDX_SHIFT	0
+#define DWC_MACSEC_TX_SAD3L_SALT_IDX_MASK	0xFFFFU
+#define DWC_MACSEC_TX_SAD3H_XPN_CIPHER		OSI_BIT(0)
+/** @} */
+
+/* ============================================================
  * RX_SAD_0_HIGH (0x104) bit fields
  * ============================================================ */
 
@@ -289,6 +360,23 @@
 #define DWC_MACSEC_RX_SAD0H_OFFSET_MASK		(0x7FU << 20)
 #define DWC_MACSEC_RX_SAD0H_PORT_ID_SHIFT	0
 #define DWC_MACSEC_RX_SAD0H_PORT_ID_MASK	0xFFFFU
+/** @} */
+
+/* ============================================================
+ * RX SAD XPN fields (0x108-0x114)
+ * Used when DWC_MACSEC_CTRL_XPNSEL is set in IP_CONTROL.
+ *
+ * RX_SAD_1_LOW  (0x108): LOWEST_PN_HI[31:0] (upper 32 bits of lowest PN)
+ * RX_SAD_1_HIGH (0x10C): SSCI[31:0]
+ * RX_SAD_2_LOW  (0x110): SSCI[63:32]
+ * RX_SAD_2_HIGH (0x114): [31:17]reserved [16]XPN_CIPHER [15:0]SALT_IDX
+ * ============================================================ */
+
+/** @addtogroup RX SAD XPN fields
+ * @{ */
+#define DWC_MACSEC_RX_SAD2H_SALT_IDX_SHIFT	0
+#define DWC_MACSEC_RX_SAD2H_SALT_IDX_MASK	0xFFFFU
+#define DWC_MACSEC_RX_SAD2H_XPN_CIPHER		OSI_BIT(16)
 /** @} */
 
 /* ============================================================
@@ -511,7 +599,7 @@
 #define DWC_AES_CTRL_MODE_GCM		0U
 #define DWC_AES_CTRL_MODE_CTR		OSI_BIT(17)
 #define DWC_AES_CTRL_KEY_SZ_256		OSI_BIT(16)
-#define DWC_AES_CTRL_CTX_IDX_MASK	0x7FU
+#define DWC_AES_CTRL_CTX_IDX_MASK	0x3FFU  /* 10 bits for 546 contexts */
 /** @} */
 
 /** @addtogroup DWC_AES_STAT bit fields (0x18)
@@ -561,8 +649,9 @@
 #define DWC_AES_BIST_TEST_GO		OSI_BIT(0)  /* self-clearing */
 /** @} */
 
-/** FIPS context index (DWC_MACSEC_AES_DEFAULT_FIPS_CTX_IDX) */
-#define DWC_AES_FIPS_CTX_IDX		96U
+/** FIPS context index (DWC_MACSEC_AES_DEFAULT_FIPS_CTX_IDX = 544)
+ * Last valid context index = DWC_MACSEC_AES_KEY_CTX - 2 = 544 */
+#define DWC_AES_FIPS_CTX_IDX		544U
 
 /** FIPS self-test polling timeout (iterations) */
 #define DWC_AES_FIPS_POLL_COUNT		5000U
