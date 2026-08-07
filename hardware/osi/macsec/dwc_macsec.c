@@ -2365,7 +2365,8 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 
 #if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
 		if (sc_info->flags == OSI_CREATE_SA) {
-			ret = dwc_aes_key_program(osi_core, sa_idx,
+			u16 rx_key_idx = sa_idx + DWC_MACSEC_TX_MAX_SA;
+			ret = dwc_aes_key_program(osi_core, rx_key_idx,
 						  sc_info->sak, key_len_256, 0U);
 			if (ret < 0) {
 				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
@@ -2787,7 +2788,7 @@ static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 	val |= (DWC_MACSEC_DATA_MODE_XLGMII_25G <<
 		DWC_MACSEC_CTRL_DATA_MODE_SHIFT);
 	/* Enable XPN */
-	val |= DWC_MACSEC_CTRL_XPNSEL;
+	val |= DWC_MACSEC_CTRL_XPNSEL | DWC_MACSEC_CTRL_USGMII;
 	/* VLANMODE = 000 (not on the clear):
 	 * VLAN tags are encrypted and authenticated together
 	 * with the payload. No VLAN info in the clear.

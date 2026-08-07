@@ -235,12 +235,12 @@
  * Encodes the data interface type and speed. Used with Dual-IF
  * to select GMII vs XLGMII at boot time.
  */
-#define DWC_MACSEC_DATA_MODE_GMII_1G		0x00U  /* 8-bit GMII, 1Gbps */
-#define DWC_MACSEC_DATA_MODE_GMII_2P5G		0x01U  /* 8-bit GMII, 2.5Gbps */
-#define DWC_MACSEC_DATA_MODE_XGMII_10G		0x02U  /* 64-bit XGMII, 10Gbps */
-#define DWC_MACSEC_DATA_MODE_XLGMII_25G		0x04U  /* 128-bit XLGMII, 25Gbps */
-#define DWC_MACSEC_DATA_MODE_XLGMII_50G		0x05U  /* 128-bit XLGMII, 50Gbps */
-#define DWC_MACSEC_DATA_MODE_XLGMII_100G	0x06U  /* 128-bit XLGMII, 100Gbps */
+#define DWC_MACSEC_DATA_MODE_GMII_1G		0x02U  /* 8-bit GMII, 1Gbps */
+#define DWC_MACSEC_DATA_MODE_GMII_2P5G		0x03U  /* 32-bit XGMII, 2.5Gbps */
+#define DWC_MACSEC_DATA_MODE_XGMII_10G		0x06U  /* 32-bit XGMII, 10Gbps */
+#define DWC_MACSEC_DATA_MODE_XLGMII_25G		0x07U  /* 32-bit XGMII, 25Gbps */
+#define DWC_MACSEC_DATA_MODE_XLGMII_50G		0x0bU  /* 64-bit XLGMII, 50Gbps */
+#define DWC_MACSEC_DATA_MODE_XLGMII_100G	0x10U  /* 128-bit XLGMII, 100Gbps */
 
 /** @brief IP_CONTROL default value for 25G XLGMII with XPN, no bypass
  *
