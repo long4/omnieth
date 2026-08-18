@@ -192,6 +192,10 @@ enum ob_macsec_nl_commands {
 	OB_MACSEC_CMD_SET_REPLAY_PROT,
 	/** MACSEC netlink command to set Cipher */
 	OB_MACSEC_CMD_SET_CIPHER,
+	/** MACSEC netlink command to set protect frames */
+	OB_MACSEC_CMD_SET_PROTECT_FRAMES,
+	/** MACSEC netlink command to set encryption mode */
+	OB_MACSEC_CMD_SET_ENCRYPT,
 	/** MACSEC netlink command to create TX SA */
 	OB_MACSEC_CMD_CREATE_TX_SA,
 	/** MACSEC netlink command to enable TX SA */

@@ -51,7 +51,7 @@ static irqreturn_t macsec_s_isr(int irq, void *data)
  * @event: OSI_MACSEC_PN_EVENT_THRESHOLD or OSI_MACSEC_PN_EVENT_EXHAUSTED
  * @ctlr: OSI_CTLR_SEL_TX or OSI_CTLR_SEL_RX
  */
-static void macsec_pn_event_handler(void *priv, u32 sa_idx, u32 sc_idx,
+void macsec_pn_event_handler(void *priv, u32 sa_idx, u32 sc_idx,
 				    u32 event, u32 ctlr)
 {
 	struct ether_priv_data *pdata = (struct ether_priv_data *)priv;
@@ -66,8 +66,8 @@ static void macsec_pn_event_handler(void *priv, u32 sa_idx, u32 sc_idx,
 	if (!skb)
 		return;
 
-	hdr = genlmsg_put(skb, 0, 0, &macsec_pdata->ob_macsec_fam, 0, 0,
-			  OB_MACSEC_CMD_PN_EVENT, OB_MACSEC_GENL_VERSION);
+	hdr = genlmsg_put(skb, 0, 0, &macsec_pdata->ob_macsec_fam, 0,
+			  OB_MACSEC_CMD_PN_EVENT);
 	if (!hdr) {
 		nlmsg_free(skb);
 		return;
@@ -89,8 +89,7 @@ static void macsec_pn_event_handler(void *priv, u32 sa_idx, u32 sc_idx,
 			  0, GFP_ATOMIC);
 
 	dev_info(pdata->dev,
-		 "%s: PN event sent: ctlr=%s sa=%u sc=%u event=%s
-",
+		 "%s: PN event sent: ctlr=%s sa=%u sc=%u event=%s\n",
 		 __func__,
 		 (ctlr == OSI_CTLR_SEL_TX) ? "TX" : "RX",
 		 sa_idx, sc_idx,
@@ -592,6 +591,87 @@ exit:
 	return ret;
 }
 
+int macsec_set_protect_frames(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr **attrs = info->attrs;
+	struct macsec_priv_data *macsec_pdata;
+	struct macsec_supplicant_data *supplicant;
+	struct ether_priv_data *pdata = NULL;
+	int ret = 0;
+
+	PRINT_ENTRY();
+	if (!attrs[OB_MACSEC_ATTR_IFNAME] ||
+	    !attrs[OB_MACSEC_ATTR_PROTECT_FRAMES]) {
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	macsec_pdata = genl_to_macsec_pdata(info);
+	if (!macsec_pdata) {
+		ret = -EPROTO;
+		goto exit;
+	}
+	pdata = macsec_pdata->ether_pdata;
+
+	if (!netif_running(pdata->ndev)) {
+		ret = -ENETDOWN;
+		dev_err(pdata->dev, "%s: MAC interface down!!\n", __func__);
+		goto exit;
+	}
+
+	mutex_lock(&macsec_pdata->lock);
+	supplicant = macsec_get_supplicant(macsec_pdata, info->snd_portid);
+	if (!supplicant) {
+		ret = -EPROTO;
+		dev_err(pdata->dev, "%s: failed to get supplicant data\n", __func__);
+		goto err_unlock;
+	}
+
+	supplicant->protect_frames = nla_get_u8(attrs[OB_MACSEC_ATTR_PROTECT_FRAMES]);
+	macsec_pdata->protect_frames = supplicant->protect_frames;
+
+err_unlock:
+	mutex_unlock(&macsec_pdata->lock);
+exit:
+	return ret;
+}
+
+int macsec_set_encrypt(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlattr **attrs = info->attrs;
+	struct macsec_priv_data *macsec_pdata;
+	struct ether_priv_data *pdata = NULL;
+	int ret = 0;
+
+	PRINT_ENTRY();
+	if (!attrs[OB_MACSEC_ATTR_IFNAME] ||
+	    !attrs[OB_MACSEC_ATTR_ENCRYPT]) {
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	macsec_pdata = genl_to_macsec_pdata(info);
+	if (!macsec_pdata) {
+		ret = -EPROTO;
+		goto exit;
+	}
+	pdata = macsec_pdata->ether_pdata;
+
+	if (!netif_running(pdata->ndev)) {
+		ret = -ENETDOWN;
+		dev_err(pdata->dev, "%s: MAC interface down!!\n", __func__);
+		goto exit;
+	}
+
+	mutex_lock(&macsec_pdata->lock);
+	/* Store global encryption enable status */
+	macsec_pdata->enabled = nla_get_u8(attrs[OB_MACSEC_ATTR_ENCRYPT]) ? OSI_ENABLE : OSI_DISABLE;
+	mutex_unlock(&macsec_pdata->lock);
+
+exit:
+	return ret;
+}
+
 static int parse_sa_config(struct nlattr **attrs, struct nlattr **tb_sa,
 			   struct osi_macsec_sc_info *sc_info,
 			   struct obpkcs_data *pkcs)
@@ -616,10 +696,24 @@ static int parse_sa_config(struct nlattr **attrs, struct nlattr **tb_sa,
 		sc_info->curr_an = nla_get_u8(tb_sa[OB_MACSEC_SA_ATTR_AN]);
 	}
 	if (tb_sa[OB_MACSEC_SA_ATTR_PN]) {
-		sc_info->next_pn = nla_get_u32(tb_sa[OB_MACSEC_SA_ATTR_PN]);
+		if (nla_len(tb_sa[OB_MACSEC_SA_ATTR_PN]) >= sizeof(u64)) {
+			u64 pn64 = nla_get_u64(tb_sa[OB_MACSEC_SA_ATTR_PN]);
+			sc_info->next_pn = lower_32_bits(pn64);
+			sc_info->next_pn_hi = upper_32_bits(pn64);
+		} else {
+			sc_info->next_pn = nla_get_u32(tb_sa[OB_MACSEC_SA_ATTR_PN]);
+			sc_info->next_pn_hi = 0;
+		}
 	}
 	if (tb_sa[OB_MACSEC_SA_ATTR_LOWEST_PN]) {
-		sc_info->lowest_pn = nla_get_u32(tb_sa[OB_MACSEC_SA_ATTR_LOWEST_PN]);
+		if (nla_len(tb_sa[OB_MACSEC_SA_ATTR_LOWEST_PN]) >= sizeof(u64)) {
+			u64 lpn64 = nla_get_u64(tb_sa[OB_MACSEC_SA_ATTR_LOWEST_PN]);
+			sc_info->lowest_pn = lower_32_bits(lpn64);
+			sc_info->lowest_pn_hi = upper_32_bits(lpn64);
+		} else {
+			sc_info->lowest_pn = nla_get_u32(tb_sa[OB_MACSEC_SA_ATTR_LOWEST_PN]);
+			sc_info->lowest_pn_hi = 0;
+		}
 	}
 	if (tb_sa[OB_MACSEC_SA_ATTR_CONF_OFFSET]) {
 		sc_info->conf_offset = nla_get_u8(tb_sa[OB_MACSEC_SA_ATTR_CONF_OFFSET]);
@@ -627,23 +721,12 @@ static int parse_sa_config(struct nlattr **attrs, struct nlattr **tb_sa,
 	if (tb_sa[OB_MACSEC_SA_ATTR_ENCRYPT]) {
 		sc_info->encrypt = nla_get_u8(tb_sa[OB_MACSEC_SA_ATTR_ENCRYPT]);
 	}
-#ifdef OBPKCS_MACSEC
-	if (pkcs) {
-		if (tb_sa[OB_MACSEC_SA_PKCS_KEY_WRAP]) {
-			memcpy(pkcs->ob_key,
-				nla_data(tb_sa[OB_MACSEC_SA_PKCS_KEY_WRAP]),
-				sizeof(pkcs->ob_key));
-		}
-		if (tb_sa[OB_MACSEC_SA_PKCS_KEK_HANDLE]) {
-			pkcs->ob_kek = nla_get_u64(tb_sa[OB_MACSEC_SA_PKCS_KEK_HANDLE]);
-		}
-	}
-#else
+#ifndef OBPKCS_MACSEC
 	if (tb_sa[OB_MACSEC_SA_ATTR_KEY]) {
 		memcpy(sc_info->sak, nla_data(tb_sa[OB_MACSEC_SA_ATTR_KEY]),
 		       sizeof(sc_info->sak));
 	}
-#endif /* OBPKCS_MACSEC */
+#endif /* !OBPKCS_MACSEC */
 	return 0;
 }
 
@@ -1657,7 +1740,6 @@ static int omni_macsec_apply_secy(struct macsec_context *ctx)
 	if (ret < 0)
 		return ret;
 
-	mutex_lock(&macsec_pdata->lock);
 	macsec_pdata->cipher = cipher;
 	macsec_pdata->protect_frames = ctx->secy->protect_frames;
 	macsec_pdata->validate_frames = ctx->secy->validate_frames;
@@ -1671,7 +1753,6 @@ static int omni_macsec_apply_secy(struct macsec_context *ctx)
 		ret = osi_macsec_cipher_config(pdata->osi_core, cipher);
 	if (ret == 0 && (macsec_pdata->enabled == OSI_ENABLE))
 		ret = omni_macsec_sync_secy_params_locked(pdata, ctx->secy);
-	mutex_unlock(&macsec_pdata->lock);
 
 	return ret;
 }
@@ -1749,10 +1830,8 @@ static int omni_macsec_disable_hw_sc(struct ether_priv_data *pdata,
 	if ((pdata == NULL) || (macsec_pdata == NULL) || (sci == NULL))
 		return -EINVAL;
 
-	mutex_lock(&macsec_pdata->lock);
 	existing_sc = omni_macsec_find_hw_sc(pdata, sci, ctlr);
 	if (existing_sc == NULL) {
-		mutex_unlock(&macsec_pdata->lock);
 		return 0;
 	}
 
@@ -1775,7 +1854,6 @@ static int omni_macsec_disable_hw_sc(struct ether_priv_data *pdata,
 		else
 			macsec_pdata->macsec_tx_an_map &= ~an_valid;
 	}
-	mutex_unlock(&macsec_pdata->lock);
 
 	return ret;
 }
@@ -1853,13 +1931,11 @@ static int omni_macsec_del_secy(struct macsec_context *ctx)
 		rcu_read_unlock();
 	}
 
-	mutex_lock(&macsec_pdata->lock);
 	macsec_pdata->protect_frames = OSI_DISABLE;
 	macsec_pdata->validate_frames = MACSEC_VALIDATE_STRICT;
 	macsec_pdata->pn_window = OSI_PN_MAX_DEFAULT;
 	macsec_pdata->macsec_rx_an_map = 0U;
 	macsec_pdata->macsec_tx_an_map = 0U;
-	mutex_unlock(&macsec_pdata->lock);
 
 	return 0;
 }
@@ -2076,7 +2152,6 @@ static int omni_macsec_program_tx_sa(struct macsec_context *ctx,
 	if (ret < 0)
 		return ret;
 
-	mutex_lock(&macsec_pdata->lock);
 	ret = osi_macsec_config(pdata->osi_core, &tx_sa, enable,
 				OSI_CTLR_SEL_TX, &kt_idx);
 #ifndef MACSEC_KEY_PROGRAM
@@ -2093,7 +2168,6 @@ static int omni_macsec_program_tx_sa(struct macsec_context *ctx,
 	if ((ret == 0) && (enable == OSI_DISABLE))
 		macsec_pdata->macsec_tx_an_map &=
 			~(1U << (tx_sa.curr_an & 0xFU));
-	mutex_unlock(&macsec_pdata->lock);
 
 	return ret;
 }
@@ -2115,7 +2189,6 @@ static int omni_macsec_program_rx_sa(struct macsec_context *ctx,
 	if (ret < 0)
 		return ret;
 
-	mutex_lock(&macsec_pdata->lock);
 	ret = osi_macsec_config(pdata->osi_core, &rx_sa, enable,
 				OSI_CTLR_SEL_RX, &kt_idx);
 #ifndef MACSEC_KEY_PROGRAM
@@ -2130,7 +2203,6 @@ static int omni_macsec_program_rx_sa(struct macsec_context *ctx,
 	if ((ret == 0) && (enable == OSI_DISABLE))
 		macsec_pdata->macsec_rx_an_map &=
 			~(1U << (rx_sa.curr_an & 0xFU));
-	mutex_unlock(&macsec_pdata->lock);
 
 	return ret;
 }
@@ -2433,6 +2505,16 @@ static const struct genl_ops ob_macsec_genl_ops[] = {
 	{
 		.cmd = OB_MACSEC_CMD_SET_CIPHER,
 		.doit = macsec_set_cipher,
+		.flags = GENL_ADMIN_PERM,
+	},
+	{
+		.cmd = OB_MACSEC_CMD_SET_PROTECT_FRAMES,
+		.doit = macsec_set_protect_frames,
+		.flags = GENL_ADMIN_PERM,
+	},
+	{
+		.cmd = OB_MACSEC_CMD_SET_ENCRYPT,
+		.doit = macsec_set_encrypt,
 		.flags = GENL_ADMIN_PERM,
 	},
 	{
@@ -2803,19 +2885,10 @@ static int macsec_tz_kt_config(struct ether_priv_data *pdata,
 		nla_put_u8(msg, OB_MACSEC_TZ_ATTR_INDEX,
 			   kt_config->table_config.index);
 		nla_put_u32(msg, OB_MACSEC_TZ_ATTR_FLAG, kt_config->flags);
-#ifdef OBPKCS_MACSEC
-		if (pkcs) {
-			nla_put(msg, OB_MACSEC_TZ_PKCS_KEY_WRAP,
-				sizeof(pkcs->ob_key),
-				pkcs->ob_key);
-			nla_put_u64_64bit(msg, OB_MACSEC_TZ_PKCS_KEK_HANDLE,
-					  pkcs->ob_kek,
-					  NL_POLICY_TYPE_ATTR_PAD);
-		}
-#else
+#ifndef OBPKCS_MACSEC
 		nla_put(msg, OB_MACSEC_TZ_ATTR_KEY, OSI_KEY_LEN_256,
 			kt_config->entry.sak);
-#endif /* OBPKCS_MACSEC */
+#endif /* !OBPKCS_MACSEC */
 		nla_nest_end(msg, nest);
 	}
 	genlmsg_end(msg, msg_head);

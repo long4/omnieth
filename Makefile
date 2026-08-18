@@ -18,7 +18,7 @@ endif
 ccflags-y += -DLINUX_OS -DOBPKCS_MACSEC -mno-outline-atomics -Werror \
 	     -I$(src)/hardware/include \
 
-ccflags-y += -Wframe-larger-than=4096
+ccflags-y += -Wframe-larger-than=8192
 
 #ccflags-y += -DOSI_DEBUG -DMACSEC_SUPPORT -DDEBUG_MACSEC -DMACSEC_KEY_PROGRAM
 ccflags-y += -DMACSEC_SUPPORT

@@ -8,8 +8,8 @@
  *
  * Hardware: DWC_macsec Single Port AC Security Module v1.05a
  *   - TX: 16 SC x 2 SA = 32 SA total
- *   - RX: 32 SC x 2 SA = 64 SA total (configurable up to 4 SA/SC)
- *   - AES-GCM-128/256, 98 key contexts
+ *   - RX: 128 SC x 4 SA = 512 SA total
+ *   - AES-GCM-128/256, 546 key contexts
  *   - MIB counters via indirect MIB_CMD interface
  *   - Keys via separate APB (macsec_id_aes_host_cfg)
  */
@@ -36,9 +36,9 @@
  *
  * Assumes encrypt+auth mode (E=1, C=1).
  */
-static inline u8 dwc_map_tci(u8 osd_tci)
+static inline u8 dwc_map_tci(u8 osd_tci, u8 encrypt)
 {
-	u8 dwc_tci = 0x03U; /* E=1, C=1 (encrypt + authenticate) */
+	u8 dwc_tci = (encrypt != 0) ? 0x03U : 0x01U; /* E=1, C=1 or E=0, C=1 */
 
 	if ((osd_tci & 0x1U) != OSI_NONE) {
 		dwc_tci |= 0x08U; /* SC bit */
@@ -203,13 +203,18 @@ static s32 dwc_tx_sai_write(struct osi_core_priv_data *const osi_core,
 		return ret;
 	}
 
-	/* Program source MAC filter if provided */
+	/* Program source MAC filter and Port ID if provided (sa_mac is 8-byte SCI) */
 	if (sa_mac != OSI_NULL) {
+		u32 port_id;
+
 		val = ((u32)sa_mac[0] << 8) | (u32)sa_mac[1];
 		osi_writela(osi_core, val, base + DWC_MACSEC_TX_SRC_FILT_MSB);
 		val = ((u32)sa_mac[2] << 24) | ((u32)sa_mac[3] << 16) |
 		      ((u32)sa_mac[4] << 8) | (u32)sa_mac[5];
 		osi_writela(osi_core, val, base + DWC_MACSEC_TX_SRC_FILT_LSB);
+
+		port_id = ((u32)sa_mac[6] << 8) | (u32)sa_mac[7];
+		osi_writela(osi_core, port_id, base + DWC_MACSEC_TX_SAI_PORT_ID);
 	}
 
 	/* Program destination MAC filter if provided */
@@ -482,11 +487,11 @@ static s32 dwc_rx_sai_clear(struct osi_core_priv_data *const osi_core,
  * @param[in] mtu: MTU value for frame length check (0 to use default)
  */
 static s32 dwc_tx_sad_write(struct osi_core_priv_data *const osi_core,
-				u16 sa_index, u32 pn,
+				u16 sa_index, u32 pn_or_ssci,
 				u8 tci, u32 active,
-				u32 mtu,
-				u32 ssci_lo, u32 ssci_hi,
-				u16 salt_idx)
+				u32 mtu, u32 port_id,
+				u32 sys_id_lo, u32 sys_id_hi,
+				u32 xpn_lo, u32 xpn_hi)
 {
 	u8 *base = (u8 *)osi_core->macsec_base;
 	u32 val;
@@ -498,8 +503,8 @@ static s32 dwc_tx_sad_write(struct osi_core_priv_data *const osi_core,
 		return ret;
 	}
 
-	/* TX_SAD_0_LOW: PN (or SSCI in XPN mode, but XPN disabled) */
-	osi_writela(osi_core, pn, base + DWC_MACSEC_TX_SAD_0_LOW);
+	/* TX_SAD_0_LOW: PN (or SSCI in XPN mode) */
+	osi_writela(osi_core, pn_or_ssci, base + DWC_MACSEC_TX_SAD_0_LOW);
 
 	/* TX_SAD_0_HIGH: ACTIVE | TCI (bits 6:2) */
 	val = ((u32)(tci & 0x1FU) << DWC_MACSEC_TX_SAD0H_TCI_SHIFT);
@@ -511,34 +516,28 @@ static s32 dwc_tx_sad_write(struct osi_core_priv_data *const osi_core,
 	/* TX_SAD_1_LOW: [31:16]SOFT_TTL [15:0]HARD_TTL (upper 16 bits each) */
 	{
 		u32 soft_ttl_hi = (DWC_DEFAULT_PN_THRESHOLD >> 16) & 0xFFFFU;
-		u32 hard_ttl_hi = DWC_DEFAULT_PN_THRESHOLD;//0xFFFFU; /* max PN = 0xFFFFFFFF */
+		u32 hard_ttl_hi = 0xFFFFU; /* max PN threshold */
 		u32 sad1_low = (soft_ttl_hi << DWC_MACSEC_TX_SAD1L_SOFT_TTL_SHIFT) |
 				    (hard_ttl_hi << DWC_MACSEC_TX_SAD1L_HARD_TTL_SHIFT);
 		osi_writela(osi_core, sad1_low, base + DWC_MACSEC_TX_SAD_1_LOW);
 	}
 
-	/* TX_SAD_1_HIGH: [13:0]MTU */
+	/* TX_SAD_1_HIGH: [31:16]PORT_ID, [13:0]MTU */
 	{
-		u32 sad1_high = 0U;
+		u32 sad1_high = ((port_id & 0xFFFFU) << DWC_MACSEC_TX_SAD1H_PORT_SHIFT);
 		if (mtu != OSI_NONE) {
-			sad1_high = (mtu & DWC_MACSEC_TX_SAD1H_MTU_MASK);
+			sad1_high |= (mtu & DWC_MACSEC_TX_SAD1H_MTU_MASK);
 		}
 		osi_writela(osi_core, sad1_high, base + DWC_MACSEC_TX_SAD_1_HIGH);
 	}
-	/* TX_SAD_2: XPN SSCI[63:0] */
-	osi_writela(osi_core, ssci_lo, base + DWC_MACSEC_TX_SAD_2_LOW);
-	osi_writela(osi_core, ssci_hi, base + DWC_MACSEC_TX_SAD_2_HIGH);
-	/* TX_SAD_3: SALT index + XPN cipher suite bit */
-	{
-		u32 sad3_low = (u32)(salt_idx & DWC_MACSEC_TX_SAD3L_SALT_IDX_MASK);
-		u32 sad3_high = (salt_idx != 0U) ?
-				DWC_MACSEC_TX_SAD3H_XPN_CIPHER : 0U;
 
-		osi_writela(osi_core, sad3_low,
-			    base + DWC_MACSEC_TX_SAD_3_LOW);
-		osi_writela(osi_core, sad3_high,
-			    base + DWC_MACSEC_TX_SAD_3_HIGH);
-	}
+	/* TX_SAD_2: SYSTEM_IDENTIFIER 64-bit (SCI) */
+	osi_writela(osi_core, sys_id_lo, base + DWC_MACSEC_TX_SAD_2_LOW);
+	osi_writela(osi_core, sys_id_hi, base + DWC_MACSEC_TX_SAD_2_HIGH);
+
+	/* TX_SAD_3: Extended PN 64-bit (XPN) */
+	osi_writela(osi_core, xpn_lo, base + DWC_MACSEC_TX_SAD_3_LOW);
+	osi_writela(osi_core, xpn_hi, base + DWC_MACSEC_TX_SAD_3_HIGH);
 
 	/* TX_SAD_PRG: trigger write */
 	val = ((u32)sa_index << DWC_MACSEC_SAD_PRG_ENTRY_SHIFT) |
@@ -636,10 +635,11 @@ static s32 dwc_tx_sad_read(struct osi_core_priv_data *const osi_core,
  * @param[in] replay_protect: 1=enable replay protection
  */
 static s32 dwc_rx_sad_write(struct osi_core_priv_data *const osi_core,
-				u16 sa_index, u32 lowest_pn,
+				u16 sa_index, u32 pn_or_ssci,
 				u32 active, u32 replay_protect, u32 validate,
-				u32 lowest_pn_hi, u32 ssci_lo,
-				u32 ssci_hi, u16 salt_idx)
+				u32 port_id,
+				u32 sys_id_lo, u32 sys_id_hi,
+				u32 xpn_lo, u32 xpn_hi)
 {
 	u8 *base = (u8 *)osi_core->macsec_base;
 	u32 val;
@@ -650,11 +650,11 @@ static s32 dwc_rx_sad_write(struct osi_core_priv_data *const osi_core,
 		return ret;
 	}
 
-	/* RX_SAD_0_LOW: PN_OR_SSCI = lowest_pn (lower 32 bits of PN) */
-	osi_writela(osi_core, lowest_pn, base + DWC_MACSEC_RX_SAD_0_LOW);
+	/* RX_SAD_0_LOW: PN (or SSCI in XPN mode) */
+	osi_writela(osi_core, pn_or_ssci, base + DWC_MACSEC_RX_SAD_0_LOW);
 
-	/* RX_SAD_0_HIGH: ACTIVE, REPLAY_EN, VALIDATE */
-	val = 0U;
+	/* RX_SAD_0_HIGH: ACTIVE, REPLAY_EN, VALIDATE, PORT_ID */
+	val = (port_id & DWC_MACSEC_RX_SAD0H_PORT_ID_MASK);
 	if (active != OSI_NONE) {
 		val |= DWC_MACSEC_RX_SAD0H_ACTIVE;
 		/* Set VALIDATE mode from caller (bits 28:27) */
@@ -665,24 +665,13 @@ static s32 dwc_rx_sad_write(struct osi_core_priv_data *const osi_core,
 	}
 	osi_writela(osi_core, val, base + DWC_MACSEC_RX_SAD_0_HIGH);
 
-	/* RX_SAD_1: upper 32 bits of lowest PN + SSCI[31:0] (XPN mode) */
-	osi_writela(osi_core, lowest_pn_hi,
-		    base + DWC_MACSEC_RX_SAD_1_LOW);
-	osi_writela(osi_core, ssci_lo,
-		    base + DWC_MACSEC_RX_SAD_1_HIGH);
+	/* RX_SAD_1: SYSTEM_IDENTIFIER 64-bit (SCI) */
+	osi_writela(osi_core, sys_id_lo, base + DWC_MACSEC_RX_SAD_1_LOW);
+	osi_writela(osi_core, sys_id_hi, base + DWC_MACSEC_RX_SAD_1_HIGH);
 
-	/* RX_SAD_2: SSCI[63:32] + SALT index + XPN cipher suite (XPN mode) */
-	osi_writela(osi_core, ssci_hi,
-		    base + DWC_MACSEC_RX_SAD_2_LOW);
-	{
-		u32 sad2_high = (u32)(salt_idx & DWC_MACSEC_RX_SAD2H_SALT_IDX_MASK);
-
-		if (salt_idx != 0U) {
-			sad2_high |= DWC_MACSEC_RX_SAD2H_XPN_CIPHER;
-		}
-		osi_writela(osi_core, sad2_high,
-			    base + DWC_MACSEC_RX_SAD_2_HIGH);
-	}
+	/* RX_SAD_2: Extended PN 64-bit (XPN) */
+	osi_writela(osi_core, xpn_lo, base + DWC_MACSEC_RX_SAD_2_LOW);
+	osi_writela(osi_core, xpn_hi, base + DWC_MACSEC_RX_SAD_2_HIGH);
 
 	/* RX_SAD_PRG: trigger write */
 	val = ((u32)sa_index << DWC_MACSEC_SAD_PRG_ENTRY_SHIFT) |
@@ -780,8 +769,8 @@ static s32 dwc_rx_sad_read(struct osi_core_priv_data *const osi_core,
 static s32 dwc_tx_sad_clear(struct osi_core_priv_data *const osi_core,
 				u16 sa_index)
 {
-	return dwc_tx_sad_write(osi_core, sa_index, 0U, 0U, OSI_NONE, 0U,
-				0U, 0U, 0U);
+	return dwc_tx_sad_write(osi_core, sa_index, 0U, 0U, OSI_NONE, 0U, 0U,
+				0U, 0U, 0U, 0U);
 }
 
 /**
@@ -790,7 +779,7 @@ static s32 dwc_tx_sad_clear(struct osi_core_priv_data *const osi_core,
 static s32 dwc_rx_sad_clear(struct osi_core_priv_data *const osi_core,
 				u16 sa_index)
 {
-	return dwc_rx_sad_write(osi_core, sa_index, 0U, OSI_NONE, OSI_NONE, 0U,
+	return dwc_rx_sad_write(osi_core, sa_index, 0U, OSI_NONE, OSI_NONE, 0U, 0U,
 				0U, 0U, 0U, 0U);
 }
 
@@ -853,6 +842,12 @@ static u32 dwc_pn_window_to_arw(u32 pn_window)
 	while (v > 0U) {
 		arw++;
 		v >>= 1U;
+	}
+
+	/* Hardware ARW SRAM width is 5-bit (Logarithmic mode), max exponent is 31 (2^31).
+	 * Clamp to 31 to prevent 32 overflow to 0 (which would turn a 4B window into 1). */
+	if (arw > 31U) {
+		arw = 31U;
 	}
 
 	return arw;
@@ -1230,7 +1225,7 @@ static s32 dwc_aes_key_program(struct osi_core_priv_data *const osi_core,
 {
 	u8 *base = (u8 *)osi_core->tz_base;
 	u32 val;
-	u32 i, j;
+	u32 i;
 	u32 key_regs;
 	s32 ret;
 
@@ -1240,13 +1235,13 @@ static s32 dwc_aes_key_program(struct osi_core_priv_data *const osi_core,
 		return ret;
 	}
 
-	/* Write key data to KEY_0..KEY_7 (write-only registers) */
+	/* Write key data to KEY_0..KEY_7 in Big-Endian order per DWC driver manual section 3.2 step 2.a.i */
 	key_regs = (key_len_256 != OSI_NONE) ? 8U : 4U;
 	for (i = 0; i < key_regs; i++) {
-		val = 0U;
-		for (j = 0; j < INTEGER_LEN; j++) {
-			val |= ((u32)key[(i * 4U) + j] << (j * 8U));
-		}
+		val = ((u32)key[i * 4U] << 24) |
+		      ((u32)key[(i * 4U) + 1U] << 16) |
+		      ((u32)key[(i * 4U) + 2U] << 8) |
+		      (u32)key[(i * 4U) + 3U];
 		osi_writela(osi_core, val, base + DWC_AES_KEY(i));
 	}
 
@@ -1262,7 +1257,19 @@ static s32 dwc_aes_key_program(struct osi_core_priv_data *const osi_core,
 	osi_writela(osi_core, val, base + DWC_AES_CTRL);
 
 	/* Wait for completion */
-	return dwc_poll_aes_busy(osi_core);
+	ret = dwc_poll_aes_busy(osi_core);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* Security best practice per DWC driver manual section 3.2 step 2.a.iv:
+	 * Clear KEY_0..KEY_7 to 0x0 to avoid key readback.
+	 */
+	for (i = 0; i < key_regs; i++) {
+		osi_writela(osi_core, 0U, base + DWC_AES_KEY(i));
+	}
+
+	return 0;
 }
 
 /* ============================================================
@@ -1646,14 +1653,15 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 				u8 new_tci;
 
 				/* Map Omni OSD TCI to DWC 5-bit TCI */
-				new_tci = dwc_map_tci(lut_config->sc_param_out.tci);
+				new_tci = dwc_map_tci(lut_config->sc_param_out.tci,
+						      lut_config->sc_param_out.encrypt);
 				ret = dwc_tx_sad_read_pn(osi_core, index, &cur_pn);
 				if (ret < 0) {
 					break;
 				}
 				ret = dwc_tx_sad_write(osi_core, index, cur_pn,
-						       new_tci, 1U, osi_core->mtu,
-						       0U, 0U, 0U);
+						       new_tci, 1U, osi_core->mtu, 0U,
+						       0U, 0U, 0U, 0U);
 			} else {
 				/* RX: re-program SAD with replay settings.
 				 * Read current lowest_pn first to preserve it.
@@ -1668,7 +1676,7 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 						       cur_lowest_pn, 1U,
 						       (lut_config->sc_param_out.pn_window > 0U) ?
 						       1U : 0U,
-						       DWC_MACSEC_RX_SAD0H_VALIDATE_STRICT,
+						       DWC_MACSEC_RX_SAD0H_VALIDATE_STRICT, 0U,
 						       0U, 0U, 0U, 0U);
 				if (ret < 0) {
 					break;
@@ -1741,14 +1749,17 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 	case OSI_LUT_SEL_SA_STATE:
 		if (rw == OSI_LUT_WRITE) {
 			if (ctlr == OSI_CTLR_SEL_TX) {
+				u8 tx_tci = (lut_config->sa_state_out.encrypt != 0) ?
+					    DWC_TCI_ENCRYPT_AUTH : DWC_TCI_AUTH_ONLY;
+
 				ret = dwc_tx_sad_write(osi_core, index,
 						       lut_config->sa_state_out.next_pn,
-						       DWC_TCI_ENCRYPT_AUTH,
+						       tx_tci,
 						       ((lut_config->flags &
 							 OSI_LUT_FLAGS_ENTRY_VALID) != OSI_NONE) ?
 						       1U : 0U,
-						       osi_core->mtu,
-						       0U, 0U, 0U);
+						       osi_core->mtu, 0U,
+						       0U, 0U, 0U, 0U);
 			} else {
 				ret = dwc_rx_sad_write(osi_core, index,
 						       lut_config->sa_state_out.lowest_pn,
@@ -1756,7 +1767,7 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 							 OSI_LUT_FLAGS_ENTRY_VALID) != OSI_NONE) ?
 						       1U : 0U,
 						       1U, /* replay protect enabled */
-						       DWC_MACSEC_RX_SAD0H_VALIDATE_STRICT,
+						       DWC_MACSEC_RX_SAD0H_VALIDATE_STRICT, 0U,
 						       0U, 0U, 0U, 0U);
 			}
 		} else {
@@ -2320,28 +2331,48 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 	 */
 		{
 			u8 salt_buf[12];
-			u32 ssci_lo, ssci_hi;
+			u32 sys_id_lo = 0U, sys_id_hi = 0U;
+			u32 pn_or_ssci = sc_info->next_pn;
+			u32 xpn_lo = 0U, xpn_hi = 0U;
+			u16 salt_idx = sa_idx;
 
-			/* Derive 96-bit SSCI from SCI for SALT table.
-			 * SAD SSCI[63:0] = Port ID (SCI[4:7]) ||
-			 *                    System ID (SCI[0:3])
-			 */
-			dwc_derive_ssci(sc_info->sci, salt_buf,
-					&ssci_lo, &ssci_hi);
+			/* System Identifier from SCI[0:5] */
+			sys_id_lo = ((u32)sc_info->sci[2] << 24) |
+				    ((u32)sc_info->sci[3] << 16) |
+				    ((u32)sc_info->sci[4] << 8)  |
+				    (u32)sc_info->sci[5];
+			sys_id_hi = ((u32)sc_info->sci[0] << 8) |
+				    (u32)sc_info->sci[1];
 
+			if (sc_info->xpn == OSI_ENABLE) {
+				u32 ssci_lo = 0U, ssci_hi = 0U;
+				dwc_prepare_xpn_sad_fields(sc_info, sa_idx,
+							   &ssci_lo, &ssci_hi,
+							   &salt_idx);
+				pn_or_ssci = ssci_lo;
+				xpn_lo = sc_info->next_pn;
+				xpn_hi = sc_info->next_pn_hi;
+			}
+
+			u32 port_id = ((u32)sc_info->sci[6] << 8) | (u32)sc_info->sci[7];
 			ret = dwc_tx_sad_write(osi_core, sa_idx,
-				       sc_info->next_pn,
-				       DWC_TCI_ENCRYPT_AUTH, 1U,
-				       osi_core->mtu,
-				       ssci_lo, ssci_hi, sa_idx);
-		if (ret < 0) {
-			return ret;
-		}
-		/* Step 3: SALT after SAD (DWC manual 3.2: SAD→SALT→SAI) */
-		ret = dwc_tx_salt_write(osi_core, sa_idx, salt_buf);
-		}
-		if (ret < 0) {
-			return ret;
+					       pn_or_ssci,
+					       DWC_TCI_ENCRYPT_AUTH, 1U,
+					       osi_core->mtu, port_id,
+					       sys_id_lo, sys_id_hi,
+					       xpn_lo, xpn_hi);
+			if (ret < 0) {
+				return ret;
+			}
+
+			if (sc_info->xpn == OSI_ENABLE) {
+				dwc_derive_ssci(sc_info->sci, salt_buf,
+						&sys_id_lo, &sys_id_hi);
+				ret = dwc_tx_salt_write(osi_core, salt_idx, salt_buf);
+				if (ret < 0) {
+					return ret;
+				}
+			}
 		}
 
 		/* Program TX SAI */
@@ -2376,63 +2407,75 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 		}
 #endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
 		/* DWC manual 3.2: RX order = Key → SAD → SALT → ARW -> SAI → MIB SC */
-		u32 validate_frames = DWC_MACSEC_RX_SAD0H_VALIDATE_STRICT;
-		u32 ssci_lo = 0U, ssci_hi = 0U;
-		u32 lowest_pn_hi = sc_info->lowest_pn_hi;
-		u16 salt_idx = 0U;
-
-#ifdef CONFIG_MACSEC
-		validate_frames = sc_info->validate_frames;
-#endif /* CONFIG_MACSEC */
-		/* Program SALT table and SAD XPN fields.
-		 * DWC IP always has XPNSEL=1 — SSCI/SALT required.
-		 * CONFIG_MACSEC: use kernel-provided ssci/salt.
-		 * MACSEC_KEY_PROGRAM: derive SSCI from SCI.
-		 */
 		{
 			u8 salt_buf[12];
+			u32 validate_frames = DWC_MACSEC_RX_SAD0H_VALIDATE_STRICT;
+			u32 sys_id_lo = 0U, sys_id_hi = 0U;
+			u32 pn_or_ssci = sc_info->lowest_pn;
+			u32 xpn_lo = 0U, xpn_hi = 0U;
+			u16 salt_idx = sa_idx;
 
-			/* Derive 96-bit SSCI from SCI per IEEE 802.1AE.
-			 * SSCI[63:0] = Port ID || System ID from SCI.
-			 */
-			dwc_derive_ssci(sc_info->sci, salt_buf,
-					&ssci_lo, &ssci_hi);
+#ifdef CONFIG_MACSEC
+			validate_frames = sc_info->validate_frames;
+#endif /* CONFIG_MACSEC */
+
+			/* System Identifier from SCI[0:5] */
+			sys_id_lo = ((u32)sc_info->sci[2] << 24) |
+				    ((u32)sc_info->sci[3] << 16) |
+				    ((u32)sc_info->sci[4] << 8)  |
+				    (u32)sc_info->sci[5];
+			sys_id_hi = ((u32)sc_info->sci[0] << 8) |
+				    (u32)sc_info->sci[1];
+
+			if (sc_info->xpn == OSI_ENABLE) {
+				u32 ssci_lo = 0U, ssci_hi = 0U;
+				dwc_prepare_xpn_sad_fields(sc_info, sa_idx,
+							   &ssci_lo, &ssci_hi,
+							   &salt_idx);
+				pn_or_ssci = ssci_lo;
+				xpn_lo = sc_info->lowest_pn;
+				xpn_hi = sc_info->lowest_pn_hi;
+			}
 
 			/* Step 6: RX SAD first (DWC manual 3.2: SAD→SALT→ARW→SAI) */
-		ret = dwc_rx_sad_write(osi_core, sa_idx,
-				       sc_info->lowest_pn, 1U, 1U,
-				       validate_frames,
-				       lowest_pn_hi, ssci_lo,
-				       ssci_hi, sa_idx);
-	}
-		if (ret < 0) {
-			return ret;
-		}
+			u32 port_id = ((u32)sc_info->sci[6] << 8) | (u32)sc_info->sci[7];
+			ret = dwc_rx_sad_write(osi_core, sa_idx,
+					       pn_or_ssci, 1U, 1U,
+					       validate_frames, port_id,
+					       sys_id_lo, sys_id_hi,
+					       xpn_lo, xpn_hi);
+			if (ret < 0) {
+				return ret;
+			}
 
-		/* Program RX ARW → Step 9: RX SAI — ARW must be ready before SAI lookup */
-		ret = dwc_arw_write(osi_core, sa_idx, sc_info->pn_window);
-		if (ret < 0) {
-			return ret;
-		}
+			if (sc_info->xpn == OSI_ENABLE) {
+				dwc_derive_ssci(sc_info->sci, salt_buf,
+						&sys_id_lo, &sys_id_hi);
+				ret = dwc_rx_salt_write(osi_core, salt_idx, salt_buf);
+				if (ret < 0) {
+					return ret;
+				}
+			}
 
-		/* RX SAI */
-		ret = dwc_rx_sai_write(osi_core, sa_idx,
-				       sc_info->sci, sc_info->curr_an);
-		if (ret < 0) {
-			return ret;
-		}
+			/* Program RX ARW → Step 9: RX SAI — ARW must be ready before SAI lookup */
+			ret = dwc_arw_write(osi_core, sa_idx, sc_info->pn_window);
+			if (ret < 0) {
+				return ret;
+			}
 
-		/* Program RX SC correlation for MIB counters */
-		ret = dwc_rx_sc_corr_write(osi_core, sa_idx,
-					   sc_info->sc_idx_start);
-		if (ret < 0) {
-			return ret;
-		}
+			/* RX SAI */
+			ret = dwc_rx_sai_write(osi_core, sa_idx,
+					       sc_info->sci, sc_info->curr_an);
+			if (ret < 0) {
+				return ret;
+			}
 
-		/* RX Anti-Replay Window already programmed above — already handled before SAI lookup */
-		ret = dwc_arw_write(osi_core, sa_idx, sc_info->pn_window);
-		if (ret < 0) {
-			return ret;
+			/* Program RX SC correlation for MIB counters */
+			ret = dwc_rx_sc_corr_write(osi_core, sa_idx,
+						   sc_info->sc_idx_start);
+			if (ret < 0) {
+				return ret;
+			}
 		}
 	}
 
