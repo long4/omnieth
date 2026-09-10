@@ -1921,12 +1921,12 @@ static void dwc_read_mmc(struct osi_core_priv_data *const osi_core)
 		DWC_MIB_RX_OCTETS_VALIDATED_GBL, 0U, 0U, 0U);
 
 	/* Per-SC counters */
-	for (i = 0; i < OSI_MACSEC_SC_INDEX_MAX && i < DWC_MACSEC_TX_MAX_SC; i++) {
+	for (i = 0; i < OSI_MACSEC_MMC_SC_MAX && i < DWC_MACSEC_TX_MAX_SC; i++) {
 		mmc->tx_pkts_protected[i] = dwc_mib_read_counter(osi_core,
 			DWC_MIB_TX_PROTECTED_PKTS_SC, i, 1U, 0U);
 	}
 
-	for (i = 0; i < OSI_MACSEC_SC_INDEX_MAX && i < DWC_MACSEC_RX_MAX_SC; i++) {
+	for (i = 0; i < OSI_MACSEC_MMC_SC_MAX && i < DWC_MACSEC_RX_MAX_SC; i++) {
 		mmc->rx_pkts_late[i] = dwc_mib_read_counter(osi_core,
 			DWC_MIB_RX_LATE_PKTS_SC, i, 0U, 0U);
 		mmc->rx_pkts_delayed[i] = dwc_mib_read_counter(osi_core,

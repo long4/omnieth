@@ -134,11 +134,7 @@ static const struct nla_policy ob_macsec_sa_genl_policy[NUM_OB_MACSEC_SA_ATTR] =
 	[OB_MACSEC_SA_ATTR_LOWEST_PN] = { .type = NLA_U32 },
 	[OB_MACSEC_SA_ATTR_CONF_OFFSET] = { .type = NLA_U8 },
 	[OB_MACSEC_SA_ATTR_ENCRYPT] = { .type = NLA_U8 },
-#ifdef OBPKCS_MACSEC
-	[OB_MACSEC_SA_PKCS_KEY_WRAP] = { .type = NLA_BINARY,
-					 .len = OB_SAK_WRAPPED_LEN,},
-	[OB_MACSEC_SA_PKCS_KEK_HANDLE] = { .type = NLA_U64 },
-#else
+#ifndef OBPKCS_MACSEC
 	[OB_MACSEC_SA_ATTR_KEY] = { .type = NLA_BINARY,
 				    .len = OSI_KEY_LEN_256,},
 #endif /* OBPKCS_MACSEC */

@@ -2047,8 +2047,10 @@ static int omni_macsec_populate_tx_sa(struct macsec_context *ctx,
 	 */
 	if (ctx->secy->xpn) {
 		tx_sa->xpn = OSI_ENABLE;
-		tx_sa->ssci = ctx->secy->ssci;
-		memcpy(tx_sa->salt, ctx->secy->salt, sizeof(tx_sa->salt));
+		//tx_sa->ssci = ctx->secy->ssci;
+		//memcpy(tx_sa->salt, ctx->secy->salt, sizeof(tx_sa->salt));		
+		tx_sa->ssci = (__force u32)ctx->sa.tx_sa->ssci;
+		memcpy(tx_sa->salt, ctx->sa.tx_sa->key.salt.bytes, sizeof(tx_sa->salt));
 	}
 
 	return 0;
@@ -2102,8 +2104,10 @@ static int omni_macsec_populate_rx_sa(struct macsec_context *ctx,
 	/* XPN: propagate kernel ssci/salt. DWC IP always has XPNSEL=1. */
 	if (ctx->secy->xpn) {
 		rx_sa->xpn = OSI_ENABLE;
-		rx_sa->ssci = ctx->secy->ssci;
-		memcpy(rx_sa->salt, ctx->secy->salt, sizeof(rx_sa->salt));
+		//rx_sa->ssci = ctx->secy->ssci;
+		//memcpy(rx_sa->salt, ctx->secy->salt, sizeof(rx_sa->salt));
+		rx_sa->ssci = (__force u32)ctx->sa.rx_sa->ssci;
+		memcpy(rx_sa->salt, ctx->sa.rx_sa->key.salt.bytes, sizeof(rx_sa->salt));
 	}
 
 	return 0;

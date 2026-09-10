@@ -54,7 +54,7 @@ struct osi_macsec_mmc_counters {
 	/** This counter provides the number of late packets
 	 *received PN < lowest PN
 	 * valid values are between 0 and UINT64_MAX */
-	u32 rx_pkts_late[OSI_MACSEC_SC_INDEX_MAX];
+	u32 rx_pkts_late[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of overrun packets
 	 * valid values are between 0 and UINT64_MAX */
 	u64 rx_pkts_overrun;
@@ -65,19 +65,19 @@ struct osi_macsec_mmc_counters {
 	u64 rx_octets_decrypted;
 	/** This counter provides the number not valid packets
 	 * valid values are between 0 and UINT64_MAX */
-	u32 rx_pkts_not_valid[OSI_MACSEC_SC_INDEX_MAX];
+	u32 rx_pkts_not_valid[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of invalid packets
 	 * valid values are between 0 and UINT64_MAX */
-	u32 in_pkts_invalid[OSI_MACSEC_SC_INDEX_MAX];
+	u32 in_pkts_invalid[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of in packet delayed
 	 * valid values are between 0 and UINT64_MAX */
-	u32 rx_pkts_delayed[OSI_MACSEC_SC_INDEX_MAX];
+	u32 rx_pkts_delayed[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of in packets un checked
 	 * valid values are between 0 and UINT64_MAX */
-	u32 rx_pkts_unchecked[OSI_MACSEC_SC_INDEX_MAX];
+	u32 rx_pkts_unchecked[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of in packets ok
 	 * valid values are between 0 and UINT64_MAX */
-	u32 rx_pkts_ok[OSI_MACSEC_SC_INDEX_MAX];
+	u32 rx_pkts_ok[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of out packets untaged
 	 * valid values are between 0 and UINT64_MAX */
 	u64 tx_pkts_untaged;
@@ -86,9 +86,9 @@ struct osi_macsec_mmc_counters {
 	u64 tx_pkts_too_long;
 	/** This counter provides the number of out packets protected
 	 * valid values are between 0 and UINT64_MAX */
-	u32 tx_pkts_protected[OSI_MACSEC_SC_INDEX_MAX];
+	u32 tx_pkts_protected[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of out packets encrypted */
-	u32 tx_pkts_encrypted[OSI_MACSEC_SC_INDEX_MAX];
+	u32 tx_pkts_encrypted[OSI_MACSEC_MMC_SC_MAX];
 	/** This counter provides the number of out octets protected/
 	 * valid values are between 0 and UINT64_MAX */
 	u64 tx_octets_protected;

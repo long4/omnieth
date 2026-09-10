@@ -227,6 +227,7 @@ struct osi_sa_state_outputs {
 	/** Indicates lowest PN to use
 	 * valid values are from 0 to UINT32_MAX */
 	u32 lowest_pn;
+	u8 encrypt;
 };
 
 /**

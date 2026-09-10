@@ -2386,5 +2386,7 @@ int macsec_dis_rx_sa(struct sk_buff *skb, struct genl_info *info);
  *
  */
 int macsec_get_tx_next_pn(struct sk_buff *skb, struct genl_info *info);
+int macsec_set_protect_frames(struct sk_buff *skb, struct genl_info *info);
+int macsec_set_encrypt(struct sk_buff *skb, struct genl_info *info);
 
 #endif /* ETHER_CALLBACK_EXPORT_H */
