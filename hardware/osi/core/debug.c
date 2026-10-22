@@ -39,7 +39,7 @@ static void core_dump_struct(struct osi_core_priv_data *osi_core,
 	unsigned long temp;
 
 	if (ptr == OSI_NULL) {
-		osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+		osi_core->osd_ops.dbg(
 					 "pointer is NULL\n");
 		return;
 	}
@@ -48,14 +48,14 @@ static void core_dump_struct(struct osi_core_priv_data *osi_core,
 	temp = size - rem;
 
 	for (i = 0; i < temp; i += 4) {
-		osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+		osi_core->osd_ops.dbg(
 					 "%02x%02x%02x%02x", ptr[i], ptr[i + 1],
 					 ptr[i + 2], ptr[i + 3]);
 		j = i;
 	}
 
 	for (i = j; i < size; i++) {
-		osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS, "%x",
+		osi_core->osd_ops.dbg( "%x",
 					ptr[i]);
 	}
 }
@@ -69,40 +69,40 @@ void core_structs_dump(struct osi_core_priv_data *osi_core)
 {
 	struct core_local *l_core = (struct core_local *)((void *)osi_core);
 
-	osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+	osi_core->osd_ops.dbg(
 				 "CORE struct size = %lu",
 				 sizeof(struct osi_core_priv_data));
 	core_dump_struct(osi_core, (u8 *)osi_core,
 			 sizeof(struct osi_core_priv_data));
 #ifdef MACSEC_SUPPORT
-	osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+	osi_core->osd_ops.dbg(
 				 "MACSEC ops size = %lu",
 				 sizeof(struct osi_macsec_core_ops));
 	core_dump_struct(osi_core, (u8 *)l_core->macsec_ops,
 			 sizeof(struct osi_macsec_core_ops));
 
-	osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+	osi_core->osd_ops.dbg(
 				 "MACSEC LUT status size = %lu",
 				 sizeof(struct osi_macsec_lut_status));
 	core_dump_struct(osi_core, (u8 *)l_core->macsec_ops,
 			 sizeof(struct osi_macsec_lut_status));
 #endif
-	osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+	osi_core->osd_ops.dbg(
 				 "HW features size = %lu",
 				 sizeof(struct osi_hw_features));
 	core_dump_struct(osi_core, (u8 *)&l_core->hw_features,
 			 sizeof(struct osi_hw_features));
-	osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+	osi_core->osd_ops.dbg(
 				 "core local size = %lu",
 				 sizeof(struct core_local));
 	core_dump_struct(osi_core, (u8 *)l_core,
 			 sizeof(struct core_local));
-	osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+	osi_core->osd_ops.dbg(
 				 "core ops size = %lu",
 				 sizeof(struct core_ops));
 	core_dump_struct(osi_core, (u8 *)l_core->ops_p,
 			 sizeof(struct core_ops));
-	osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_STRUCTS,
+	osi_core->osd_ops.dbg(
 				 "if_ops_p struct size = %lu",
 				 sizeof(struct if_core_ops));
 	core_dump_struct(osi_core, (u8 *)l_core->if_ops_p,
@@ -141,9 +141,8 @@ void core_reg_dump(struct osi_core_priv_data *osi_core)
 			break;
 
 		reg_val = osi_readla(osi_core,
-				     (u8 *)osi_core->base + addr);
-		osi_core->osd_ops.printf(osi_core, OSI_DEBUG_TYPE_REG,
-					 "%x: %x\n", addr, reg_val);
+				     (u8 *)osi_core->mac_base + addr);
+		osi_core->osd_ops.dbg("%x: %x\n", addr, reg_val);
 		addr += 4;
 	}
 }

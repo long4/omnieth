@@ -269,8 +269,7 @@ static s32 mgbe_get_rx_hwstamp(const struct osi_dma_priv_data *const osi_dma,
 	if (retry == PTP_CTX_DESC_RETRY_CNT) {
 		/* Timed out waiting for Rx timestamp */
 		ret = -1;
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "hwstamp: Context descriptor OWN bit not cleared by HW\n",
+		OSI_DMA_ERR(osi_dma->osd, "hwstamp: Context descriptor OWN bit not cleared by HW:0x%llx\n",
 			    (u64)(context_desc->rdes3));
 		goto fail;
 	}

@@ -53,7 +53,6 @@
 #endif /* DEBUG_MACSEC */
 /** @brief maximum key index */
 #define OSI_KEY_INDEX_MAX		31U
-#define OSI_KEY_INDEX_MAX_T26X		95U
 /** @brief maximum PN by default */
 #define OSI_PN_MAX_DEFAULT		0xFFFFFFFFU
 /** @brief threshold PN by default */
@@ -62,8 +61,6 @@
 #define OSI_TCI_DEFAULT 		0x1
 /** @brief maximum SCs index */
 #define OSI_SC_INDEX_MAX		31U
-/** @brief maximum SCs index for T26X */
-#define OSI_SC_INDEX_MAX_T26X		47U
 /**
  * @brief Length of ethernet type field
  */
@@ -143,9 +140,8 @@
  * @{
  */
 /** @brief MACSEC max ip types */
-#define MAX_MACSEC_IP_TYPES 2
-#define OSI_MACSEC_T23X 0U
-#define OSI_MACSEC_T26X 1U
+#define MAX_MACSEC_IP_TYPES 1
+#define OSI_MACSEC_OB01 0U
 /** @brief TX MACSEC controller */
 #define OSI_CTLR_SEL_TX		0U
 /** @brief RX MACSEC controller */
@@ -160,12 +156,8 @@
 #define OSI_COE_LUT_MAX_INDEX	8U
 /** @brief Maximum bypass lut table index */
 #define OSI_BYP_LUT_MAX_INDEX	31U
-/** @brief Maximum bypass lut table index for T26X */
-#define OSI_BYP_LUT_MAX_INDEX_T26X	47U
 /** @brief Maximum number of SAs */
 #define OSI_SA_LUT_MAX_INDEX	31U
-/** @brief Maximum number of SAs for T26X */
-#define OSI_SA_LUT_MAX_INDEX_T26X	95U
 
 /** @} */
 
@@ -211,7 +203,7 @@
 /**
  * @brief Indicates different operations on MACSEC SA
  */
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 #define OSI_CREATE_SA           1U
 #endif /* MACSEC_KEY_PROGRAM */
 /** @brief Command to enable SA */

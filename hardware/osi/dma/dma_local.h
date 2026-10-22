@@ -24,8 +24,8 @@
 #ifndef INCLUDED_DMA_LOCAL_H
 #define INCLUDED_DMA_LOCAL_H
 
+#include <linux/printk.h>
 #include <osi_dma.h>
-#include "eqos_dma.h"
 #include "mgbe_dma.h"
 
 /**
@@ -53,26 +53,12 @@ static inline s32 validate_dma_mac_ver_update_chans(u32 mac,
 						        u32 *l_mac_ver)
 {
 	const u32 max_dma_chan[OSI_MAX_MAC_IP_TYPES] = {
-		OSI_EQOS_MAX_NUM_CHANS,
-		OSI_MGBE_T23X_MAX_NUM_CHANS,
+		OSI_MGBE_OB01_MAX_NUM_CHANS,
 		OSI_MGBE_MAX_NUM_CHANS
 	};
 	s32 ret;
 
 	switch (mac_ver) {
-#ifndef OSI_STRIPPED_LIB
-	case OSI_EQOS_MAC_5_00:
-		*num_max_chans = OSI_EQOS_XP_MAX_CHANS;
-		*l_mac_ver = MAC_CORE_VER_TYPE_EQOS;
-		ret = 1;
-		break;
-#endif /* !OSI_STRIPPED_LIB */
-	case OSI_EQOS_MAC_5_30:
-	case OSI_EQOS_MAC_5_40:
-		*num_max_chans = OSI_EQOS_MAX_NUM_CHANS;
-		*l_mac_ver = MAC_CORE_VER_TYPE_EQOS_5_30;
-		ret = 1;
-		break;
 	case OSI_MGBE_MAC_3_10:
 	//TBD: T264 uFPGA reports mac version 3.2
 	case OSI_MGBE_MAC_3_20:
@@ -110,7 +96,9 @@ static inline s32 validate_dma_mac_ver_update_chans(u32 mac,
  */
 static inline u32 osi_dma_readl(void *addr)
 {
-	return *(volatile u32 *)addr;
+	u32 ret = *(volatile u32 *)addr;
+	OSI_DMA_DEBUG("[MGBE] osi_dma_readl from addr:0x%llx value:0x%x\n", (unsigned long long)addr-dma_base, ret);
+	return ret;
 }
 /**
  * @brief osi_dma_writel - Write to a memory mapped register.
@@ -128,8 +116,70 @@ static inline u32 osi_dma_readl(void *addr)
  */
 static inline void osi_dma_writel(u32 val, void *addr)
 {
+	OSI_DMA_DEBUG("[MGBE] osi_dma_writel 0x%x to addr: 0x%llx\n", val, (unsigned long long)addr-dma_base);
 	*(volatile u32 *)addr = val;
 }
+
+static inline s32 osi_dma_writel_safe(u32 val, void *addr)
+{
+    u32 read_val;
+    u32 retry = 0;
+    s32 ret = -1;
+
+    while (++retry < 10) {
+        osi_dma_writel(val, addr);
+        read_val = osi_dma_readl(addr);
+        if (val == read_val) {
+            ret = 0;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+static inline s32 osi_dma_clearbit_safe(u32 bit_mask, void *addr)
+{
+    u32 read_val, val;
+    u32 retry = 0;
+    s32 ret = -1;
+
+    read_val = osi_dma_readl(addr);
+    while (++retry < 10) {
+	val = (read_val & (~bit_mask));
+        osi_dma_writel(val, addr);
+        read_val = osi_dma_readl(addr);
+        if (val == read_val) {
+	    OSI_DMA_DEBUG("[MGBE] osi_dma_clearbit_safe done\n");
+            return 0;
+        }
+    }
+
+    OSI_DMA_DEBUG("[MGBE] osi_dma_clearbit_safe failed\n");
+    return ret;
+}
+
+static inline s32 osi_dma_setbit_safe(u32 bit_mask, void *addr)
+{
+    u32 read_val, val;
+    u32 retry = 0;
+    s32 ret = -1;
+
+    read_val = osi_dma_readl(addr);
+    while (++retry < 10) {
+	val = (read_val | bit_mask);
+        osi_dma_writel(val, addr);
+        read_val = osi_dma_readl(addr);
+        if (val == read_val) {
+	    OSI_DMA_DEBUG("[MGBE] osi_dma_setbit_safe done\n");
+            return 0;
+        }
+    }
+
+    OSI_DMA_DEBUG("[MGBE] osi_dma_setbit_safe failed\n");
+    return ret;
+}
+
 
 /**
  * @brief TX timestamp helper MACROS
@@ -337,12 +387,11 @@ static inline void update_rx_tail_ptr(const struct osi_dma_priv_data *const osi_
 				      u32 dma_chan,
 				      u64 tailptr)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	const u32 local_mac = osi_dma->mac % OSI_MAX_MAC_IP_TYPES;
 	// Added bitwise with 0xFF to avoid CERT INT30-C error
 	u32 chan = (dma_chan & chan_mask[local_mac]) & (0xFFU);
 	const u32 tail_ptr_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RDTP(chan),
 		MGBE_DMA_CHX_RDTLP(chan),
 		MGBE_DMA_CHX_RDTLP(chan)
 	};

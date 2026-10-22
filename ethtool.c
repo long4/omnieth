@@ -1520,15 +1520,7 @@ static int ether_set_coalesce(struct net_device *dev,
 
 	if (ec->rx_coalesce_usecs == OSI_DISABLE) {
 		osi_dma->use_riwt = OSI_DISABLE;
-	} else if (osi_dma->mac == OSI_MAC_HW_EQOS &&
-		   (ec->rx_coalesce_usecs > ETHER_MAX_RX_COALESCE_USEC ||
-		    ec->rx_coalesce_usecs < ETHER_EQOS_MIN_RX_COALESCE_USEC)) {
-		netdev_err(dev, "invalid rx_usecs, must be in a range of %d to %d usec\n",
-			   ETHER_EQOS_MIN_RX_COALESCE_USEC,
-			   ETHER_MAX_RX_COALESCE_USEC);
-		return -EINVAL;
-
-	} else if (osi_dma->mac != OSI_MAC_HW_EQOS &&
+	} else if (osi_dma->mac == OSI_MAC_HW_MGBE &&
 		   (ec->rx_coalesce_usecs > ETHER_MAX_RX_COALESCE_USEC ||
 		    ec->rx_coalesce_usecs < ETHER_MGBE_MIN_RX_COALESCE_USEC)) {
 		netdev_err(dev,
@@ -1958,16 +1950,12 @@ int ether_get_rxnfc(struct net_device *ndev,
 
 u32 ether_get_rxfh_key_size(struct net_device *ndev)
 {
-	struct osi_ioctl ioctl_data = {};
-
-	return sizeof(ioctl_data.data.rss.key);
+	return OSI_RSS_HASH_KEY_SIZE;
 }
 
 u32 ether_get_rxfh_indir_size(struct net_device *ndev)
 {
-	struct osi_ioctl ioctl_data = {};
-
-	return ARRAY_SIZE(ioctl_data.data.rss.table);
+	return OSI_RSS_MAX_TABLE_SIZE;
 }
 
 /**
@@ -1993,36 +1981,17 @@ static int ether_get_rxfh(struct net_device *ndev,
 {
 	struct ether_priv_data *pdata = netdev_priv(ndev);
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
-	struct osi_ioctl ioctl_data = {};
-	struct osi_core_rss *rss = (struct osi_core_rss *)&ioctl_data.data.rss;
-#if defined(OB_ETHTOOL_OPS_GET_SET_RXFH_HAS_RXFH_PARAM_ARGS)
 	u32 *indir = rxfh->indir;
 	u8 *hfunc = &rxfh->hfunc;
-	u8 *key = rxfh->key;
-#else
-	u32 *indir = rxfh->indir;
-	u8 *hfunc = &rxfh->hfunc;
-	u8 *key = rxfh->key;
-#endif
-	int i;
+	u8 *hkey = rxfh->key;
+	bool en;
 	int ret = 0;
 
-	ioctl_data.cmd = OSI_CMD_GET_RSS;
-	ret = osi_handle_ioctl(osi_core, &ioctl_data);
+	ret = osi_handle_get_rss(osi_core, hkey, indir, &en);
 	if (ret != 0) {
 		dev_err(pdata->dev, "Failed to get RSS info from registers\n");
 		return ret;
 	}
-
-	if (indir) {
-		for (i = 0; i < ARRAY_SIZE(rss->table); i++)
-			indir[i] = rss->table[i];
-	}
-
-	if (key) {
-		memcpy(key, rss->key, sizeof(rss->key));
-	}
-
 	if (hfunc)
 		*hfunc = ETH_RSS_HASH_TOP;
 
@@ -2054,19 +2023,9 @@ static int ether_set_rxfh(struct net_device *ndev,
 #endif
 {
 	struct ether_priv_data *pdata = netdev_priv(ndev);
-	struct osi_ioctl ioctl_data = {};
-	struct osi_core_rss *rss = (struct osi_core_rss *)&ioctl_data.data.rss;
-#if defined(OB_ETHTOOL_OPS_GET_SET_RXFH_HAS_RXFH_PARAM_ARGS)
 	u32 *indir = rxfh->indir;
 	u8 hfunc = rxfh->hfunc;
-	u8 *key = rxfh->key;
-#else
-	u32 *indir = rxfh->indir;
-	u8 hfunc = rxfh->hfunc;
-	u8 *key = rxfh->key;
-#endif
-	int i;
-	int ret = 0;
+	u8 *hkey = rxfh->key;
 
 	if (!netif_running(ndev)) {
 		netdev_err(pdata->ndev, "interface must be up\n");
@@ -2076,27 +2035,7 @@ static int ether_set_rxfh(struct net_device *ndev,
 	if ((hfunc != ETH_RSS_HASH_NO_CHANGE) && (hfunc != ETH_RSS_HASH_TOP))
 		return -EOPNOTSUPP;
 
-	/* First get current RSS configuration and update what ever required */
-	ioctl_data.cmd = OSI_CMD_GET_RSS;
-	ret = osi_handle_ioctl(pdata->osi_core, &ioctl_data);
-	if (ret != 0) {
-		dev_err(pdata->dev, "Failed to get current RSS configuration\n");
-	        return ret;
-	}
-
-	if (indir) {
-		for (i = 0; i < ARRAY_SIZE(rss->table); i++)
-			rss->table[i] = indir[i];
-	}
-
-	if (key) {
-		memcpy(rss->key, key, sizeof(rss->key));
-	}
-	/* RSS need to be enabled for applying the settings */
-	rss->enable = 1;
-
-	ioctl_data.cmd = OSI_CMD_CONFIG_RSS;
-	return osi_handle_ioctl(pdata->osi_core, &ioctl_data);
+	return osi_handle_set_rss(pdata->osi_core, hkey, indir, true);
 }
 
 #if defined(OB_ETHTOOL_OPS_GET_SET_RINGPARAM_HAS_RINGPARAM_AND_EXTACT_ARGS) /* Linux v5.17 */

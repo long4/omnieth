@@ -25,7 +25,7 @@
 #include <osi_core.h>
 #include "mgbe_core.h"
 #include "core_local.h"
-#include "xpcs.h"
+#include "pcs.h"
 #include "mgbe_mmc.h"
 #include "core_common.h"
 
@@ -53,7 +53,7 @@ static s32 mgbe_poll_for_mac_acrtl(struct osi_core_priv_data *osi_core)
 	/* Poll Until MAC_Indir_Access_Ctrl OB is clear */
 	while (count < MGBE_MAC_INDIR_AC_OB_RETRY) {
 		mac_indir_addr_ctrl = osi_readla(osi_core,
-						 (u8 *)osi_core->base +
+						 (u8 *)osi_core->mac_base +
 						 MGBE_MAC_INDIR_AC);
 		if ((mac_indir_addr_ctrl & MGBE_MAC_INDIR_AC_OB) == OSI_NONE) {
 			/* OB is clear exit the loop */
@@ -91,16 +91,14 @@ static s32 mgbe_mac_indir_addr_write(struct osi_core_priv_data *osi_core,
 					 u32 value)
 {
 	const u32 ac_msel_mask[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_MAC_INDIR_AC_MSEL,
 		MGBE_MAC_INDIR_AC_MSEL_T26X
 	};
 	const u32 ac_msel_shift[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_MAC_INDIR_AC_MSEL_SHIFT,
 		MGBE_MAC_INDIR_AC_MSEL_SHIFT_T264
 	};
-	void *base = osi_core->base;
+	void *base = osi_core->mac_base;
 	u32 mac = osi_core->mac;
 	u32 addr = 0;
 	s32 ret = 0;
@@ -131,8 +129,8 @@ static s32 mgbe_mac_indir_addr_write(struct osi_core_priv_data *osi_core,
 
 	/* Wait until OB bit reset */
 	if (mgbe_poll_for_mac_acrtl(osi_core) < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Fail to write MAC_Indir_Access_Ctrl\n", mc_no);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Fail to write MAC_Indir_Access_Ctrl:%d\n", mc_no);
 		ret = -1;
 	}
 
@@ -161,16 +159,14 @@ static s32 mgbe_mac_indir_addr_read(struct osi_core_priv_data *osi_core,
 					u32 *value)
 {
 	const u32 ac_msel_mask[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_MAC_INDIR_AC_MSEL,
 		MGBE_MAC_INDIR_AC_MSEL_T26X
 	};
 	const u32 ac_msel_shift[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_MAC_INDIR_AC_MSEL_SHIFT,
 		MGBE_MAC_INDIR_AC_MSEL_SHIFT_T264
 	};
-	void *base = osi_core->base;
+	void *base = osi_core->mac_base;
 	u32 mac = osi_core->mac;
 	u32 addr = 0;
 	s32 ret = 0;
@@ -198,8 +194,8 @@ static s32 mgbe_mac_indir_addr_read(struct osi_core_priv_data *osi_core,
 
 	/* Wait until OB bit reset */
 	if (mgbe_poll_for_mac_acrtl(osi_core) < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Fail to write MAC_Indir_Access_Ctrl\n", mc_no);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Fail to write MAC_Indir_Access_Ctrl:%d\n", mc_no);
 		ret = -1;
 		goto fail;
 	}
@@ -231,12 +227,10 @@ static s32 mgbe_filter_args_validate(struct osi_core_priv_data *const osi_core,
 {
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	const u32 idx_max[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		OSI_MGBE_MAX_MAC_ADDRESS_FILTER,
 		OSI_MGBE_MAX_MAC_ADDRESS_FILTER_T26X
 	};
 	const u64 chansel_max[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_MAC_XDCS_DMA_MAX,
 		MGBE_MAC_XDCS_DMA_MAX_T26X
 	};
@@ -251,9 +245,8 @@ static s32 mgbe_filter_args_validate(struct osi_core_priv_data *const osi_core,
 
 	/* check for valid index */
 	if (idx >= idx_max[mac]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"invalid MAC filter index\n",
-			idx);
+		OSI_CORE_ERR(osi_core->osd, 
+			"invalid MAC filter index:%d\n", idx);
 		ret = -1;
 		goto fail;
 	}
@@ -262,36 +255,32 @@ static s32 mgbe_filter_args_validate(struct osi_core_priv_data *const osi_core,
 	if ((l_core->num_max_chans > 0x0U) &&
 	    (dma_chan > (l_core->num_max_chans - 0x1U)) &&
 	    (dma_chan != OSI_CHAN_ANY)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_OUTOFBOUND,
-			"invalid dma channel\n",
-			(u64)dma_chan);
+		OSI_CORE_ERR(osi_core->osd, 
+			"invalid dma channel:%u\n", dma_chan);
 		ret = -1;
 		goto fail;
 	}
 
 	/* validate dma_chansel argument */
 	if (dma_chansel > chansel_max[mac]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_OUTOFBOUND,
-			"invalid dma_chansel value\n",
-			dma_chansel);
+		OSI_CORE_ERR(osi_core->osd, 
+			"invalid dma_chansel value:%llu\n", dma_chansel);
 		ret = -1;
 		goto fail;
 	}
 
 	/* validate addr_mask argument */
 	if (addr_mask > MGBE_MAB_ADDRH_MBC_MAX_MASK) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid addr_mask value\n",
-			addr_mask);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid addr_mask value:%u\n", addr_mask);
 		ret = -1;
 		goto fail;
 	}
 
 	/* validate src_dest argument */
 	if ((src_dest != OSI_SA_MATCH) && (src_dest != OSI_DA_MATCH)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid src_dest value\n",
-			src_dest);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid src_dest value:%u\n", src_dest);
 		ret = -1;
 		goto fail;
 	}
@@ -299,9 +288,8 @@ static s32 mgbe_filter_args_validate(struct osi_core_priv_data *const osi_core,
 	/* validate dma_routing_enable argument */
 	if ((dma_routing_enable != OSI_ENABLE) &&
 		(dma_routing_enable != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid dma_routing value\n",
-			dma_routing_enable);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid dma_routing value:%u\n", dma_routing_enable);
 		ret = -1;
 	}
 fail:
@@ -349,8 +337,8 @@ static void mgbe_free_rchlist_index(struct osi_core_priv_data *osi_core,
 				    const s32 rch_idx)  {
 
 	if ((rch_idx < 0) || (rch_idx >= (s32)RCHLIST_SIZE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid rch_idx\n", rch_idx);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid rch_idx:%d\n", rch_idx);
 		return ;
 	}
 	osi_core->rch_index[rch_idx].in_use = OSI_NONE;
@@ -426,20 +414,18 @@ static s32 mgbe_rchlist_write(struct osi_core_priv_data *osi_core,
 			          u32 *data, u32 read_write)
 {
 	s32 ret = 0;
-	u8 *base = osi_core->base;
+	u8 *base = osi_core->mac_base;
 	u32 val = 0U;
 	if ((acc_mode != OSI_ENABLE) && (acc_mode != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid acc_mode argment\n",
-			acc_mode);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid acc_mode argument:%u\n", acc_mode);
 		ret = -1;
 		goto done;
 	}
 
 	if ((read_write != OSI_ENABLE) && (read_write != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid read_write argment\n",
-			read_write);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid read_write argument:%u\n", read_write);
 		ret = -1;
 		goto done;
 	}
@@ -451,9 +437,8 @@ static s32 mgbe_rchlist_write(struct osi_core_priv_data *osi_core,
 				     MGBE_MTL_RCHlist_READ_UDELAY,
 				     MGBE_MTL_RCHlist_READ_RETRY);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to read/write\n",
-			val);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to read/write:%u\n", val);
 		ret = -1;
 		goto done;
 	}
@@ -495,9 +480,8 @@ static s32 mgbe_rchlist_write(struct osi_core_priv_data *osi_core,
 				     MGBE_MTL_RCHlist_READ_UDELAY,
 				     MGBE_MTL_RCHlist_READ_RETRY);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to write\n",
-			ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to write:%u\n", val);
 		ret = -1;
 	}
 
@@ -647,7 +631,6 @@ static s32 mgbe_update_mac_addr_low_high_reg(
 				const struct osi_filter *filter)
 {
 	const u32 dch_dpc_reg[OSI_MAX_MAC_IP_TYPES] = {
-		0xFF, /* place holder */
 		MGBE_MAC_DCHSEL,
 		MGBE_MAC_DPCSEL
 	 };
@@ -674,7 +657,7 @@ static s32 mgbe_update_mac_addr_low_high_reg(
 
 	// To make sure idx is not more than max to address CERT INT30-C
 	idx = idx % OSI_MGBE_MAX_MAC_ADDRESS_FILTER_T26X;
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			   MGBE_MAC_ADDRH((idx)));
 
 	/* read current value at index preserve XDCS current value */
@@ -683,8 +666,8 @@ static s32 mgbe_update_mac_addr_low_high_reg(
 				       idx,
 				       &xdcs_dds);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "indirect register read failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "indirect register read failed\n");
 		goto fail;
 	}
 
@@ -745,10 +728,10 @@ static s32 mgbe_update_mac_addr_low_high_reg(
 		}
 
 		value |= OSI_MASK_16BITS;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			    MGBE_MAC_ADDRH((idx)));
 		osi_writela(osi_core, OSI_MAX_32BITS,
-			    (u8 *)osi_core->base +  MGBE_MAC_ADDRL((idx)));
+			    (u8 *)osi_core->mac_base +  MGBE_MAC_ADDRL((idx)));
 	} else {
 		/* Add DMA channel to value in binary */
 		value = OSI_NONE;
@@ -766,12 +749,12 @@ static s32 mgbe_update_mac_addr_low_high_reg(
 		osi_writela(osi_core,
 			    ((u32)addr[4] | ((u32)addr[5] << 8) |
 			    MGBE_MAC_ADDRH_AE | value),
-			    (u8 *)osi_core->base + MGBE_MAC_ADDRH((idx)));
+			    (u8 *)osi_core->mac_base + MGBE_MAC_ADDRH((idx)));
 
 		osi_writela(osi_core,
 			    ((u32)addr[0] | ((u32)addr[1] << 8) |
 			    ((u32)addr[2] << 16) | ((u32)addr[3] << 24)),
-			    (u8 *)osi_core->base +  MGBE_MAC_ADDRL((idx)));
+			    (u8 *)osi_core->mac_base +  MGBE_MAC_ADDRL((idx)));
 
 		if (osi_core->mac != OSI_MAC_HW_MGBE_T26X) {
 			/* Write XDCS configuration into MAC_DChSel_IndReg(x) */
@@ -786,8 +769,8 @@ static s32 mgbe_update_mac_addr_low_high_reg(
 				ret = mgbe_rchlist_add_del(osi_core, filter,
 							   1, &rch_idx, &rch);
 				if (ret < 0) {
-					OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     			     "rchlist add del failed\n", 0ULL);
+					OSI_CORE_ERR(osi_core->osd, 
+			     			     "rchlist add del failed\n");
 					goto fail;
 				}
 				value = OSI_NONE;
@@ -808,12 +791,12 @@ static s32 mgbe_update_mac_addr_low_high_reg(
 				osi_writela(osi_core,
 					    ((u32)addr[4] | ((u32)addr[5] << 8) |
 					    MGBE_MAC_ADDRH_AE | value),
-					    (u8 *)osi_core->base + MGBE_MAC_ADDRH((idx)));
+					    (u8 *)osi_core->mac_base + MGBE_MAC_ADDRH((idx)));
 
 				osi_writela(osi_core,
 					    ((u32)addr[0] | ((u32)addr[1] << 8) |
 					    ((u32)addr[2] << 16) | ((u32)addr[3] << 24)),
-					    (u8 *)osi_core->base +  MGBE_MAC_ADDRL((idx)));
+					    (u8 *)osi_core->mac_base +  MGBE_MAC_ADDRL((idx)));
 			} else {
 				/* No duplication */
 				xdcs_dds &= ~(MGBE_MAC_XDCS_DMA_MAX | MGBE_MAC_XDCST_DMA_MAX);
@@ -868,7 +851,7 @@ static s32 mgbe_poll_for_l3l4crtl(struct osi_core_priv_data *osi_core)
 		count++;
 
 		l3l4_addr_ctrl = osi_readla(osi_core,
-					    (u8 *)osi_core->base +
+					    (u8 *)osi_core->mac_base +
 					    MGBE_MAC_L3L4_ADDR_CTR);
 		if ((l3l4_addr_ctrl & MGBE_MAC_L3L4_ADDR_CTR_XB) == OSI_NONE) {
 			/* Set cond to 0 to exit loop */
@@ -903,11 +886,10 @@ static s32 mgbe_l3l4_filter_write(struct osi_core_priv_data *osi_core,
 				      u32 filter_type,
 				      u32 value)
 {
-	void *base = osi_core->base;
+	void *base = osi_core->mac_base;
 	u32 addr = 0;
 	s32 ret = 0;
 	const u32 fnum[OSI_MAX_MAC_IP_TYPES] = {
-		MGBE_MAC_L3L4_ADDR_CTR_IDDR_FNUM,
 		MGBE_MAC_L3L4_ADDR_CTR_IDDR_FNUM,
 		MGBE_MAC_L3L4_ADDR_CTR_IDDR_FNUM_T264,
 	};
@@ -942,9 +924,8 @@ static s32 mgbe_l3l4_filter_write(struct osi_core_priv_data *osi_core,
 
 	/* Wait untile XB bit reset */
 	if (mgbe_poll_for_l3l4crtl(osi_core) < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Fail to write L3_L4_Address_Control\n",
-			     filter_type);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Fail to write L3_L4_Address_Control:%u\n", addr);
 		ret = -1;
 	}
 
@@ -985,7 +966,6 @@ static s32 mgbe_config_l3l4_filters(struct osi_core_priv_data *const osi_core,
 	u32 l3_addr1_reg = 0;
 	u32 ctr_reg = 0;
 	const u32 max_filter_no[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAX_L3_L4_FILTER - 1U,
 		OSI_MGBE_MAX_L3_L4_FILTER - 1U,
 		OSI_MGBE_MAX_L3_L4_FILTER_T264 - 1U,
 	};
@@ -994,9 +974,8 @@ static s32 mgbe_config_l3l4_filters(struct osi_core_priv_data *const osi_core,
 	s32 ret = -1;
 
 	if (filter_no_r > max_filter_no[osi_core->mac]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Filter number is more than allowed\n",
-			     filter_no_r);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Filter number is more than allowed:%u\n", filter_no_r);
 		goto exit_func;
 	}
 
@@ -1087,36 +1066,32 @@ static s32 mgbe_config_vlan_filtering(struct osi_core_priv_data *osi_core,
 					  const u32 perfect_inverse_match)
 {
 	u32 value;
-	u8 *base = osi_core->base;
+	u8 *base = osi_core->mac_base;
 
 	/* validate perfect_inverse_match argument */
 	if (perfect_hash_filtering == OSI_HASH_FILTER_MODE) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_OPNOTSUPP,
-			"VLAN hash filter is not supported, VTHM not updated\n",
-			0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			"VLAN hash filter is not supported, VTHM not updated\n");
 		return -1;
 	}
 	if (perfect_hash_filtering != OSI_PERFECT_FILTER_MODE) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid perfect_hash_filtering value\n",
-			perfect_hash_filtering);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid perfect_hash_filtering value:%u\n", perfect_hash_filtering);
 		return -1;
 	}
 
 	/* validate filter_enb_dis argument */
 	if ((filter_enb_dis != OSI_ENABLE) && (filter_enb_dis != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid filter_enb_dis value\n",
-			filter_enb_dis);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid filter_enb_dis value:%u\n", filter_enb_dis);
 		return -1;
 	}
 
 	/* validate perfect_inverse_match argument */
 	if ((perfect_inverse_match != OSI_ENABLE) &&
 	    (perfect_inverse_match != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid perfect_inverse_match value\n",
-			perfect_inverse_match);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid perfect_inverse_match value:%u\n", perfect_inverse_match);
 		return -1;
 	}
 
@@ -1157,23 +1132,21 @@ static s32 mgbe_config_ptp_rxq(struct osi_core_priv_data *const osi_core,
 				   const u32 rxq_idx,
 				   const u32 enable)
 {
-	u8 *base = osi_core->base;
+	u8 *base = osi_core->mac_base;
 	u32 value = 0U;
 	u32 i = 0U;
 
 	/* Validate the RX queue index argument */
 	if (rxq_idx >= OSI_MGBE_MAX_NUM_QUEUES) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid PTP RX queue index\n",
-			rxq_idx);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid PTP RX queue index:%u\n", rxq_idx);
 		return -1;
 	}
 
 	/* Validate enable argument */
 	if ((enable != OSI_ENABLE) && (enable != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid enable input\n",
-			enable);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid enable input:%u\n", enable);
 		return -1;
 	}
 
@@ -1185,9 +1158,8 @@ static s32 mgbe_config_ptp_rxq(struct osi_core_priv_data *const osi_core,
 		}
 	}
 	if (i == osi_core->num_mtl_queues) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"PTP RX queue not enabled\n",
-			rxq_idx);
+		OSI_CORE_ERR(osi_core->osd, 
+			"PTP RX queue not enabled:%u\n", rxq_idx);
 		return -1;
 	}
 
@@ -1237,10 +1209,12 @@ static s32 mgbe_config_mac_loopback(struct osi_core_priv_data *const osi_core,
 					u32 lb_mode)
 {
 	u32 value;
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 
 	/* don't allow only if loopback mode is other than 0 or 1 */
 	if ((lb_mode != OSI_ENABLE) && (lb_mode != OSI_DISABLE)) {
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid loopback mode:%u\n", lb_mode);
 		return -1;
 	}
 
@@ -1285,7 +1259,7 @@ static s32 mgbe_config_arp_offload(struct osi_core_priv_data *const osi_core,
 {
 	u32 mac_rmcr;
 	u32 val;
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 
 	if ((enable != OSI_ENABLE) && (enable != OSI_DISABLE)) {
 		return -1;
@@ -1333,7 +1307,7 @@ static s32 mgbe_config_arp_offload(struct osi_core_priv_data *const osi_core,
 static s32 mgbe_config_frp(struct osi_core_priv_data *const osi_core,
 			       const u32 enabled)
 {
-	u8 *base = osi_core->base;
+	u8 *base = osi_core->mac_base;
 	u32 op_mode = 0U, val = 0U;
 	s32 ret = 0;
 
@@ -1350,9 +1324,8 @@ static s32 mgbe_config_frp(struct osi_core_priv_data *const osi_core,
 					     (MGBE_MTL_FRP_READ_UDELAY),
 					     MGBE_MTL_FRP_READ_RETRY);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"Fail to enable FRP\n",
-				val);
+			OSI_CORE_ERR(osi_core->osd, 
+				"Fail to enable FRP:%u\n", val);
 			ret = -1;
 			goto done;
 		}
@@ -1376,9 +1349,8 @@ static s32 mgbe_config_frp(struct osi_core_priv_data *const osi_core,
 					     (MGBE_MTL_FRP_READ_UDELAY),
 					     (MGBE_MTL_FRP_READ_RETRY));
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"Fail to disable FRP\n",
-				val);
+			OSI_CORE_ERR(osi_core->osd, 
+				"Fail to disable FRP:%u\n", val);
 			ret = -1;
 			goto done;
 		}
@@ -1420,7 +1392,7 @@ static s32 mgbe_frp_write(struct osi_core_priv_data *osi_core,
 			      u32 data)
 {
 	s32 ret = 0;
-	u8 *base = osi_core->base;
+	u8 *base = osi_core->mac_base;
 	u32 val = 0U;
 	(void)acc_sel;
 
@@ -1431,9 +1403,8 @@ static s32 mgbe_frp_write(struct osi_core_priv_data *osi_core,
 				     (MGBE_MTL_FRP_READ_UDELAY),
 				     (MGBE_MTL_FRP_READ_RETRY));
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to write\n",
-			val);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to write:%u\n", val);
 		ret = -1;
 		goto done;
 	}
@@ -1467,9 +1438,8 @@ static s32 mgbe_frp_write(struct osi_core_priv_data *osi_core,
 				     (MGBE_MTL_FRP_READ_UDELAY),
 				     (MGBE_MTL_FRP_READ_RETRY));
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to write\n",
-			val);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to write:%u\n", val);
 		ret = -1;
 	}
 
@@ -1614,7 +1584,7 @@ static void  mgbe_update_frp_nve(struct osi_core_priv_data *const osi_core,
 				 const u32 nve)
 {
 	u32 val;
-	u8 *base = osi_core->base;
+	u8 *base = osi_core->mac_base;
 
 	/* Update NVE and NPE in MTL_RXP_Control_Status register */
 	val = osi_readla(osi_core, base + MGBE_MTL_RXP_CS);
@@ -1623,7 +1593,7 @@ static void  mgbe_update_frp_nve(struct osi_core_priv_data *const osi_core,
 	/* Add new NVE and NPE */
 	val |= (nve & MGBE_MTL_RXP_CS_NVE);
 	val |= ((nve << MGBE_MTL_RXP_CS_NPE_SHIFT) & MGBE_MTL_RXP_CS_NPE);
-	if (osi_core->uphy_gbe_mode == OSI_GBE_MODE_25G) {
+	if (osi_core->phy_gbe_mode == OSI_GBE_MODE_25G) {
 		/* Clear ANP first and for 25G overwrite Active Number of PIPE with 3 */
 		val = (val & MGBE_MTL_RXP_CS_CLR_ANP) | MGBE_MTL_RXP_CS_ANP;
 	}
@@ -1669,9 +1639,6 @@ static s32 mgbe_configure_mtl_queue(struct osi_core_priv_data *osi_core,
 	 * vale= (size in KB / 256) - 1U
 	 */
 	const u32 rx_fifo_sz[OSI_MAX_MAC_IP_TYPES][OSI_MGBE_MAX_NUM_QUEUES] = {
-		{
-			0U ,0U ,0U ,0U ,0U ,0U ,0U ,0U ,0U ,0U
-		},
 		{
 			FIFO_SZ(160U), FIFO_SZ(2U), FIFO_SZ(2U), FIFO_SZ(2U),
 			FIFO_SZ(2U), FIFO_SZ(2U), FIFO_SZ(2U), FIFO_SZ(2U),
@@ -1738,13 +1705,13 @@ static s32 mgbe_configure_mtl_queue(struct osi_core_priv_data *osi_core,
 
 	if (osi_unlikely((qinx >= OSI_MGBE_MAX_NUM_QUEUES) ||
 			 (osi_core->tc[qinx] >= OSI_MAX_TC_NUM))) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"Incorrect queues/TC number\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"Incorrect queues:%u TC number:%u\n", qinx, osi_core->tc[qinx]);
 		ret = -1;
 		goto fail;
 	}
 
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_CHX_TX_OP_MODE(qinx));
 	value &= ~MGBE_MTL_Q_SIZE_MASK;
 	if (osi_core->pre_sil == OSI_ENABLE) {
@@ -1764,10 +1731,10 @@ static s32 mgbe_configure_mtl_queue(struct osi_core_priv_data *osi_core,
 		value |= (osi_core->tc[qinx] << MGBE_MTL_CHX_TX_OP_MODE_Q2TC_SH);
 	}
 	osi_writela(osi_core, value, (u8 *)
-		   osi_core->base + MGBE_MTL_CHX_TX_OP_MODE(qinx));
+		   osi_core->mac_base + MGBE_MTL_CHX_TX_OP_MODE(qinx));
 
 	/* read RX Q0 Operating Mode Register */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_CHX_RX_OP_MODE(qinx));
 	value &= ~MGBE_MTL_Q_SIZE_MASK;
 	if (osi_core->pre_sil == OSI_ENABLE) {
@@ -1780,43 +1747,43 @@ static s32 mgbe_configure_mtl_queue(struct osi_core_priv_data *osi_core,
 	/* Enable HW flow control */
 	value |= MGBE_MTL_RXQ_OP_MODE_EHFC;
 
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_CHX_RX_OP_MODE(qinx));
 
 	/* Update RFA and RFD
 	 * RFA: Threshold for Activating Flow Control
 	 * RFD: Threshold for Deactivating Flow Control
 	 */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_RXQ_FLOW_CTRL(qinx));
 	value &= ~MGBE_MTL_RXQ_OP_MODE_RFD_MASK;
 	value &= ~MGBE_MTL_RXQ_OP_MODE_RFA_MASK;
 	value |= (rfd_rfa[qinx] << MGBE_MTL_RXQ_OP_MODE_RFD_SHIFT) & MGBE_MTL_RXQ_OP_MODE_RFD_MASK;
 	value |= (rfd_rfa[qinx] << MGBE_MTL_RXQ_OP_MODE_RFA_SHIFT) & MGBE_MTL_RXQ_OP_MODE_RFA_MASK;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_RXQ_FLOW_CTRL(qinx));
 
 	/* Transmit Queue weight, all TX weights are equal */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_TCQ_QW(qinx));
 	value |= MGBE_MTL_TCQ_QW_ISCQW;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_TCQ_QW(qinx));
 
 	/* Default ETS tx selection algo */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_TCQ_ETS_CR(osi_core->tc[qinx]));
 	value &= ~MGBE_MTL_TCQ_ETS_CR_AVALG;
 	value |= OSI_MGBE_TXQ_AVALG_ETS;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_TCQ_ETS_CR(osi_core->tc[qinx]));
 
 	/* Enable Rx Queue Control */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MAC_RQC0R);
 	value |= ((osi_core->rxq_ctrl[qinx] & MGBE_MAC_RXQC0_RXQEN_MASK) <<
 		  (MGBE_MAC_RXQC0_RXQEN_SHIFT(qinx)));
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MAC_RQC0R);
 fail:
 	return ret;
@@ -1844,7 +1811,7 @@ static s32 mgbe_rss_write_reg(struct osi_core_priv_data *osi_core,
 				  u32 value,
 				  u32 is_key)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	u32 retry = 100U;
 	u32 ctrl = 0U;
 	u32 count = 0U;
@@ -1866,9 +1833,7 @@ static s32 mgbe_rss_write_reg(struct osi_core_priv_data *osi_core,
 	/* poll for write operation to complete */
 	while (cond == 1) {
 		if (count > retry) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to update RSS Hash key or table\n",
-				     0ULL);
+			OSI_CORE_ERR(osi_core->osd, "Failed to update RSS Hash key or table\n");
 			ret = -1;
 			goto err;
 		}
@@ -1898,9 +1863,8 @@ static s32 mgbe_rss_wait_for_completion(struct osi_core_priv_data *const osi_cor
 	/* poll for write operation to complete */
 	while (cond == 1) {
 		if (count > retry) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to read RSS Hash key or table\n",
-				     0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to read RSS Hash key or table\n");
 			ret = -1;
 			goto err;
 		}
@@ -1921,7 +1885,7 @@ err:
 static s32 mgbe_rss_read_key(struct osi_core_priv_data *const osi_core,
                                 u8 *rss_key)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	u32 ctrl = 0U;
 	u32 value = 0U;
 	u32 i = 0U;
@@ -1958,7 +1922,7 @@ static s32 mgbe_rss_read_key(struct osi_core_priv_data *const osi_core,
 static s32 mgbe_rss_read_table(struct osi_core_priv_data *const osi_core,
                                   u32 *table)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	u32 ctrl = 0U;
 	u32 i;
 	s32 ret = 0;
@@ -1999,27 +1963,27 @@ static s32 mgbe_rss_read_table(struct osi_core_priv_data *const osi_core,
  * @retval -1 on failure.
  */
 static s32 mgbe_get_rss(struct osi_core_priv_data *osi_core,
-                            struct osi_core_rss *rss)
+                            uint8_t * const hkey, uint32_t * const indir, bool * const enable)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	u32 value;
 	s32 ret = 0;
 
 	/* Read hash key */
-	ret = mgbe_rss_read_key(osi_core, rss->key);
+	ret = mgbe_rss_read_key(osi_core, hkey);
 	if (ret < 0) {
 		goto err;
 	}
 
 	/* Read hash table */
-	ret = mgbe_rss_read_table(osi_core, rss->table);
+	ret = mgbe_rss_read_table(osi_core, indir);
 	if (ret < 0) {
 		goto err;
 	}
 
 	/* Read RSS enable status */
 	value = osi_readla(osi_core, addr + MGBE_MAC_RSS_CTRL);
-	rss->enable = ((value & MGBE_MAC_RSS_CTRL_RSSE) != 0U) ? OSI_ENABLE : OSI_DISABLE;
+	*enable = ((value & MGBE_MAC_RSS_CTRL_RSSE) != 0U) ? true : false;
 
 err:
 	return ret;
@@ -2040,14 +2004,14 @@ err:
  * @retval -1 on failure.
  */
 static s32 mgbe_config_rss(struct osi_core_priv_data *osi_core,
-				const struct osi_core_rss *rss)
+				const uint8_t * hkey, const uint32_t * indir, const bool enable)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	u32 value = 0;
 	u32 i = 0, j = 0;
 	s32 ret = 0;
 
-	if (rss->enable == OSI_DISABLE) {
+	if (enable == false) {
 		/* RSS not supported */
 		goto exit;
 	}
@@ -2059,10 +2023,10 @@ static s32 mgbe_config_rss(struct osi_core_priv_data *osi_core,
 
 	/* Program the hash key */
 	for (i = 0; i < OSI_RSS_HASH_KEY_SIZE; i += 4U) {
-		value = ((u32)rss->key[i] |
-			 ((u32)rss->key[i + 1U] << 8U) |
-			 ((u32)rss->key[i + 2U] << 16U) |
-			 ((u32)rss->key[i + 3U] << 24U));
+		value = ((u32)hkey[i] |
+			 ((u32)hkey[i + 1U] << 8U) |
+			 ((u32)hkey[i + 2U] << 16U) |
+			 ((u32)hkey[i + 3U] << 24U));
 		ret = mgbe_rss_write_reg(osi_core, j, value, OSI_ENABLE);
 		if (ret < 0) {
 			goto exit;
@@ -2072,7 +2036,7 @@ static s32 mgbe_config_rss(struct osi_core_priv_data *osi_core,
 
 	/* Program Hash table */
 	for (i = 0; i < OSI_RSS_MAX_TABLE_SIZE; i++) {
-		ret = mgbe_rss_write_reg(osi_core, i, rss->table[i],
+		ret = mgbe_rss_write_reg(osi_core, i, indir[i],
 					 OSI_NONE);
 		if (ret < 0) {
 			goto exit;
@@ -2103,7 +2067,7 @@ static s32 mgbe_config_flow_control(struct osi_core_priv_data *const osi_core,
 					const u32 flw_ctrl)
 {
 	u32 val;
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 
 	/* return on invalid argument */
 	if (flw_ctrl > (OSI_FLOW_CTRL_RX | OSI_FLOW_CTRL_TX)) {
@@ -2183,17 +2147,17 @@ static s32 pcs_configure_fsm(struct osi_core_priv_data *const osi_core,
 	/* Enable/Disable FSM time-out safety mechanism inside XPCS */
 	ret = xpcs_write_safety(osi_core, XPCS_VR_XS_PCS_SFTY_DISABLE_0, xpcs_sfty_val);
 	if (ret != 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "XPCS safety register write failure\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "XPCS safety register write failure\n");
 		goto fail;
 	}
 	/* Applicable only for 25G */
-	if (osi_core->uphy_gbe_mode == OSI_GBE_MODE_25G) {
+	if (osi_core->phy_gbe_mode == OSI_GBE_MODE_25G) {
 		/* Enabling/Disabling FT_DIS/FP_DIS/DPP_DIS/ECC_DIS/CSRP_DIS/IFT_DIS in XLGPCS */
 		ret = xpcs_write_safety(osi_core, XLGPCS_VR_XS_PCS_SFTY_DISABLE_0, xlgpcs_sfty_val);
 		if (ret != 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "XLGPCS safety register write failure\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "XLGPCS safety register write failure\n");
 			goto fail;
 		}
 	}
@@ -2219,12 +2183,10 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 	u32 value = 0U;
 	s32 ret = 0;
 	const u32 xpcs_intr_ctrl_reg[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		XPCS_WRAP_INTERRUPT_CONTROL,
 		T26X_XPCS_WRAP_INTERRUPT_CONTROL
 	};
 	const u32 intr_en[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_WRAP_COMMON_INTR_ENABLE,
 		MGBE_T26X_WRAP_COMMON_INTR_ENABLE
 	};
@@ -2240,7 +2202,7 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 			goto fail;
 		}
 		/* Below setting is applicable only for 25G in XLGPCS */
-		if (osi_core->uphy_gbe_mode == OSI_GBE_MODE_25G) {
+		if (osi_core->phy_gbe_mode == OSI_GBE_MODE_25G) {
 			/* T264-MGBE_HSIv2-59	Initialization of Transaction Timeout in XLGPCS */
 			/* T264-MGBE_HSIv2-60	Initialization of Watchdog Timer for XLGPCS FSM States */
 			value = (0xCBU << XPCS_SFTY_1US_MULT_SHIFT) & XPCS_SFTY_1US_MULT_MASK;
@@ -2255,10 +2217,10 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 
 		/* T23X-MGBE_HSIv2-38: Initialization of Register Parity for control registers */
 		value = osi_readla(osi_core,
-				   (u8 *)osi_core->base + MGBE_MAC_SCSR_CONTROL);
+				   (u8 *)osi_core->mac_base + MGBE_MAC_SCSR_CONTROL);
 		value |= MGBE_CPEN;
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MGBE_MAC_SCSR_CONTROL);
+			    (u8 *)osi_core->mac_base + MGBE_MAC_SCSR_CONTROL);
 
 		/* For T26x CE/UCE are not handled by SW driver,since they are directly
 		 * reported to FSI through HSM , so not enabling it
@@ -2266,7 +2228,7 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 		if (osi_core->mac != OSI_MAC_HW_MGBE_T26X) {
 			/* T23X-MGBE_HSIv2-1 Configure ECC */
 			value = osi_readla(osi_core,
-					   (u8 *)osi_core->base + MGBE_MTL_ECC_CONTROL);
+					   (u8 *)osi_core->mac_base + MGBE_MTL_ECC_CONTROL);
 			value &= ~MGBE_MTL_ECC_MTXED;
 			value &= ~MGBE_MTL_ECC_MRXED;
 			value &= ~MGBE_MTL_ECC_MGCLED;
@@ -2274,31 +2236,31 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 			value &= ~MGBE_MTL_ECC_TSOED;
 			value &= ~MGBE_MTL_ECC_DESCED;
 			osi_writela(osi_core, value,
-				    (u8 *)osi_core->base + MGBE_MTL_ECC_CONTROL);
+				    (u8 *)osi_core->mac_base + MGBE_MTL_ECC_CONTROL);
 			/* Enable Interrupt */
 			/*  T23X-MGBE_HSIv2-1: Enabling of Memory ECC */
 			value = osi_readla(osi_core,
-					   (u8 *)osi_core->base + MGBE_MTL_ECC_INTERRUPT_ENABLE);
+					   (u8 *)osi_core->mac_base + MGBE_MTL_ECC_INTERRUPT_ENABLE);
 			value |= MGBE_MTL_TXCEIE;
 			value |= MGBE_MTL_RXCEIE;
 			value |= MGBE_MTL_GCEIE;
 			value |= MGBE_MTL_RPCEIE;
 			osi_writela(osi_core, value,
-				    (u8 *)osi_core->base + MGBE_MTL_ECC_INTERRUPT_ENABLE);
+				    (u8 *)osi_core->mac_base + MGBE_MTL_ECC_INTERRUPT_ENABLE);
 
 			value = osi_readla(osi_core,
-					   (u8 *)osi_core->base + MGBE_DMA_ECC_INTERRUPT_ENABLE);
+					   (u8 *)osi_core->mac_base + MGBE_DMA_ECC_INTERRUPT_ENABLE);
 			value |= MGBE_DMA_TCEIE;
 			value |= MGBE_DMA_DCEIE;
 			osi_writela(osi_core, value,
-				    (u8 *)osi_core->base + MGBE_DMA_ECC_INTERRUPT_ENABLE);
+				    (u8 *)osi_core->mac_base + MGBE_DMA_ECC_INTERRUPT_ENABLE);
 
-			value = osi_readla(osi_core, (u8 *)osi_core->base +
+			value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					   intr_en[osi_core->mac]);
 			value |= MGBE_REGISTER_PARITY_ERR;
 			value |= MGBE_CORE_CORRECTABLE_ERR;
 			value |= MGBE_CORE_UNCORRECTABLE_ERR;
-			osi_writela(osi_core, value, (u8 *)osi_core->base +
+			osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 				    intr_en[osi_core->mac]);
 
 			value = osi_readla(osi_core, (u8 *)osi_core->xpcs_base +
@@ -2311,10 +2273,10 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 
 			/* T23X-MGBE_HSIv2-2: Enabling of Bus Parity */
 			value = osi_readla(osi_core,
-					   (u8 *)osi_core->base + MGBE_MTL_DPP_CONTROL);
+					   (u8 *)osi_core->mac_base + MGBE_MTL_DPP_CONTROL);
 			value &= ~MGBE_DDPP;
 			osi_writela(osi_core, value,
-				    (u8 *)osi_core->base + MGBE_MTL_DPP_CONTROL);
+				    (u8 *)osi_core->mac_base + MGBE_MTL_DPP_CONTROL);
 
 		}
 
@@ -2327,7 +2289,7 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 		value |= ((u32)0x3U << MGBE_LTMRMD_SHIFT) & MGBE_LTMRMD_MASK;
 		value |= ((u32)0x3U << MGBE_NTMRMD_SHIFT) & MGBE_NTMRMD_MASK;
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MGBE_DWCXG_CORE_MAC_FSM_ACT_TIMER);
+			    (u8 *)osi_core->mac_base + MGBE_DWCXG_CORE_MAC_FSM_ACT_TIMER);
 
 		/** Deactivate below TX/RX FSMs as per the HW guidelines specified
 		 * in bug 4502985 during the link down state:
@@ -2335,20 +2297,20 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 		 * SNPS_SCS_REG1[16] for TRC
 		 */
 		value = (MGBE_SNPS_SCS_REG1_TRCFSM | MGBE_SNPS_SCS_REG1_RPERXLPIFSM);
-		osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_SNPS_SCS_REG1);
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_SNPS_SCS_REG1);
 
 		/* T23X-MGBE_HSIv2-3: Enabling and Initialization of Watchdog Timer */
 		/* T23X-MGBE_HSIv2-4: Enabling of Consistency Monitor for XGMAC FSM State */
 		value = MGBE_PRTYEN | MGBE_TMOUTEN;
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MGBE_MAC_FSM_CONTROL);
+			    (u8 *)osi_core->mac_base + MGBE_MAC_FSM_CONTROL);
 
 		/* T23X-MGBE_HSIv2-20: Enabling of error reporting for Inbound Bus CRC errors */
 		value = osi_readla(osi_core,
-				   (u8 *)osi_core->base + MGBE_MMC_RX_INTR_EN);
+				   (u8 *)osi_core->mac_base + MGBE_MMC_RX_INTR_EN);
 		value |= MGBE_RXCRCERPIE;
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MGBE_MMC_RX_INTR_EN);
+			    (u8 *)osi_core->mac_base + MGBE_MMC_RX_INTR_EN);
 
 		ret = pcs_configure_fsm(osi_core, OSI_ENABLE);
 	} else {
@@ -2362,7 +2324,7 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 		if (osi_core->mac != OSI_MAC_HW_MGBE_T26X) {
 			/* T23X-MGBE_HSIv2-1 Disable ECC */
 			value = osi_readla(osi_core,
-					   (u8 *)osi_core->base + MGBE_MTL_ECC_CONTROL);
+					   (u8 *)osi_core->mac_base + MGBE_MTL_ECC_CONTROL);
 			value |= MGBE_MTL_ECC_MTXED;
 			value |= MGBE_MTL_ECC_MRXED;
 			value |= MGBE_MTL_ECC_MGCLED;
@@ -2370,20 +2332,20 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 			value |= MGBE_MTL_ECC_TSOED;
 			value |= MGBE_MTL_ECC_DESCED;
 			osi_writela(osi_core, value,
-				    (u8 *)osi_core->base + MGBE_MTL_ECC_CONTROL);
+				    (u8 *)osi_core->mac_base + MGBE_MTL_ECC_CONTROL);
 			/* Disable Interrupts */
 			osi_writela(osi_core, 0,
-				    (u8 *)osi_core->base + MGBE_MTL_ECC_INTERRUPT_ENABLE);
+				    (u8 *)osi_core->mac_base + MGBE_MTL_ECC_INTERRUPT_ENABLE);
 
 			osi_writela(osi_core, 0,
-				    (u8 *)osi_core->base + MGBE_DMA_ECC_INTERRUPT_ENABLE);
+				    (u8 *)osi_core->mac_base + MGBE_DMA_ECC_INTERRUPT_ENABLE);
 
-			value = osi_readla(osi_core, (u8 *)osi_core->base +
+			value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					   intr_en[osi_core->mac]);
 			value &= ~MGBE_REGISTER_PARITY_ERR;
 			value &= ~MGBE_CORE_CORRECTABLE_ERR;
 			value &= ~MGBE_CORE_UNCORRECTABLE_ERR;
-			osi_writela(osi_core, value, (u8 *)osi_core->base +
+			osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 				    intr_en[osi_core->mac]);
 
 			value = osi_readla(osi_core, (u8 *)osi_core->xpcs_base +
@@ -2396,38 +2358,38 @@ static s32 mgbe_hsi_configure(struct osi_core_priv_data *const osi_core,
 
 			/* T23X-MGBE_HSIv2-2: Disable of Bus Parity */
 			value = osi_readla(osi_core,
-					   (u8 *)osi_core->base + MGBE_MTL_DPP_CONTROL);
+					   (u8 *)osi_core->mac_base + MGBE_MTL_DPP_CONTROL);
 			value |=  MGBE_DDPP;
 			osi_writela(osi_core, value,
-					(u8 *)osi_core->base + MGBE_MTL_DPP_CONTROL);
+					(u8 *)osi_core->mac_base + MGBE_MTL_DPP_CONTROL);
 		}
 		/* T23X-MGBE_HSIv2-38: Disable Register Parity for control registers */
 		value = osi_readla(osi_core,
-				   (u8 *)osi_core->base + MGBE_MAC_SCSR_CONTROL);
+				   (u8 *)osi_core->mac_base + MGBE_MAC_SCSR_CONTROL);
 		value &= ~MGBE_CPEN;
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MGBE_MAC_SCSR_CONTROL);
+			    (u8 *)osi_core->mac_base + MGBE_MAC_SCSR_CONTROL);
 
 		/* T23X-MGBE_HSIv2-5: Disabling and DeInitialization of Transaction Timeout  */
 		value = osi_readla(osi_core,
-				  (u8 *)osi_core->base + MGBE_DWCXG_CORE_MAC_FSM_ACT_TIMER);
+				  (u8 *)osi_core->mac_base + MGBE_DWCXG_CORE_MAC_FSM_ACT_TIMER);
 		value &= ~(MGBE_TMR_MASK | MGBE_CTMR_MASK | MGBE_LTMRMD_MASK | MGBE_NTMRMD_MASK);
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MGBE_DWCXG_CORE_MAC_FSM_ACT_TIMER);
+			    (u8 *)osi_core->mac_base + MGBE_DWCXG_CORE_MAC_FSM_ACT_TIMER);
 
 		value = osi_readla(osi_core,
-				  (u8 *)osi_core->base + MGBE_MAC_FSM_CONTROL);
+				  (u8 *)osi_core->mac_base + MGBE_MAC_FSM_CONTROL);
 		value &= ~MGBE_PRTYEN;
 		value &= ~MGBE_TMOUTEN;
 		/* T23X-MGBE_HSIv2-4: Disabling of Consistency Monitor for XGMAC FSM State */
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MGBE_MAC_FSM_CONTROL);
+			    (u8 *)osi_core->mac_base + MGBE_MAC_FSM_CONTROL);
 
 		value = osi_readla(osi_core,
-				   (u8 *)osi_core->base + MGBE_MMC_RX_INTR_EN);
+				   (u8 *)osi_core->mac_base + MGBE_MMC_RX_INTR_EN);
 		value &= ~MGBE_RXCRCERPIE;
 		/* T23X-MGBE_HSIv2-20: Disabling of error reporting for Inbound Bus CRC errors */
-		osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_MMC_RX_INTR_EN);
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_MMC_RX_INTR_EN);
 
 		ret = pcs_configure_fsm(osi_core, OSI_DISABLE);
 	}
@@ -2465,11 +2427,11 @@ static s32 mgbe_hsi_inject_err(struct osi_core_priv_data *const osi_core,
 
 	switch (error_code) {
 	case OSI_CORRECTABLE_ERR:
-		osi_writela(osi_core, val_ce, (u8 *)osi_core->base +
+		osi_writela(osi_core, val_ce, (u8 *)osi_core->mac_base +
 			    MGBE_MTL_DEBUG_CONTROL);
 		break;
 	case OSI_UNCORRECTABLE_ERR:
-		osi_writela(osi_core, val_ue, (u8 *)osi_core->base +
+		osi_writela(osi_core, val_ue, (u8 *)osi_core->mac_base +
 			    MGBE_MTL_DEBUG_CONTROL);
 		break;
 	default:
@@ -2486,7 +2448,7 @@ static inline u32
 mgbe_core_chan_is_coe(const struct osi_core_priv_data * const osi_core,
 		      u32 chan_id)
 {
-	for (u32 irqn = 0U; irqn < osi_core->num_vm_irqs; irqn++) {
+	for (u32 irqn = 0U; irqn < osi_core->num_irqs; irqn++) {
 		if (osi_core->irq_data[irqn].is_coe == 0U)
 			continue;
 
@@ -2522,18 +2484,17 @@ mgbe_core_chan_is_coe(const struct osi_core_priv_data * const osi_core,
 static void mgbe_configure_mac(struct osi_core_priv_data *osi_core)
 {
 	u32 value = 0U, max_queue = 0U, i = 0U;
-	const u32 intr_en[OSI_MAX_MAC_IP_TYPES] = {
-		0,
-		MGBE_WRAP_COMMON_INTR_ENABLE,
-		MGBE_T26X_WRAP_COMMON_INTR_ENABLE
-	};
+	//const u32 intr_en[OSI_MAX_MAC_IP_TYPES] = {
+	//	MGBE_WRAP_COMMON_INTR_ENABLE,
+	//	MGBE_T26X_WRAP_COMMON_INTR_ENABLE
+	//};
 
 	/* TODO: Need to check if we need to enable anything in Tx configuration
 	 * value = osi_readla(osi_core,
-			      (u8 *)osi_core->base + MGBE_MAC_TMCR);
+			      (u8 *)osi_core->mac_base + MGBE_MAC_TMCR);
 	 */
 	/* Read MAC Rx Configuration Register */
-	value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_RMCR);
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_RMCR);
 	/* Enable Automatic Pad or CRC Stripping */
 	/* Enable CRC stripping for Type packets */
 	/* Enable Rx checksum offload engine by default */
@@ -2555,10 +2516,10 @@ static void mgbe_configure_mac(struct osi_core_priv_data *osi_core)
 	}
 
 	osi_writela(osi_core, value,
-		    (u8 *)osi_core->base + MGBE_MAC_RMCR);
+		    (u8 *)osi_core->mac_base + MGBE_MAC_RMCR);
 
 	value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_MAC_TMCR);
+			   (u8 *)osi_core->mac_base + MGBE_MAC_TMCR);
 	/* DDIC bit set is needed to improve MACSEC Tput */
 	value |= MGBE_MAC_TMCR_DDIC;
 	/* Jabber Disable */
@@ -2566,11 +2527,11 @@ static void mgbe_configure_mac(struct osi_core_priv_data *osi_core)
 		value |= MGBE_MAC_TMCR_JD;
 	}
 	osi_writela(osi_core, value,
-		    (u8 *)osi_core->base + MGBE_MAC_TMCR);
+		    (u8 *)osi_core->mac_base + MGBE_MAC_TMCR);
 
 	/* Enable Multicast and Broadcast Queue */
 	value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_MAC_RQC1R);
+			   (u8 *)osi_core->mac_base + MGBE_MAC_RQC1R);
 	value |= MGBE_MAC_RQC1R_MCBCQEN;
 	/* Set MCBCQ to highest enabled RX queue index */
 	for (i = 0; i < osi_core->num_dma_chans; i++) {
@@ -2584,27 +2545,27 @@ static void mgbe_configure_mac(struct osi_core_priv_data *osi_core)
 	value &= ~(MGBE_MAC_RQC1R_MCBCQ);
 	value |= (max_queue << MGBE_MAC_RQC1R_MCBCQ_SHIFT);
 	osi_writela(osi_core, value,
-		    (u8 *)osi_core->base + MGBE_MAC_RQC1R);
+		    (u8 *)osi_core->mac_base + MGBE_MAC_RQC1R);
 
 	/* Disable all MMC s32errupts */
 	/* Disable all MMC Tx s32errupts */
-	osi_writela(osi_core, OSI_NONE, (u8 *)osi_core->base +
+	osi_writela(osi_core, OSI_NONE, (u8 *)osi_core->mac_base +
 		   MGBE_MMC_TX_INTR_EN);
 
 	/* Configure MMC counters */
 	value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_MMC_CNTRL);
+			   (u8 *)osi_core->mac_base + MGBE_MMC_CNTRL);
 	value |= MGBE_MMC_CNTRL_CNTRST | MGBE_MMC_CNTRL_RSTONRD |
 		 MGBE_MMC_CNTRL_CNTMCT | MGBE_MMC_CNTRL_CNTPRST;
 	if (osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
 		value |= MGBE_MMC_CNTRL_DRCHM;
 	}
 	osi_writela(osi_core, value,
-		    (u8 *)osi_core->base + MGBE_MMC_CNTRL);
+		    (u8 *)osi_core->mac_base + MGBE_MMC_CNTRL);
 
 	/* Enable MAC s32errupts */
 	/* Read MAC IMR Register */
-	value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_IER);
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 	/* RGSMIIIM - RGMII/SMII interrupt and TSIE Enable */
 	/* TXESIE - Transmit Error Status Interrupt Enable */
 	/* TODO: LPI need to be enabled during EEE implementation */
@@ -2614,32 +2575,34 @@ static void mgbe_configure_mac(struct osi_core_priv_data *osi_core)
 	/* Clear link status interrupt and enable after lane bring up done */
 	value &= ~MGBE_IMR_RGSMIIIE;
 	value |= MGBE_IMR_TSIE;
-	osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_MAC_IER);
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 
 	/* Mask the mmc counters interrupts */
 	value = MGBE_MMC_IPC_RX_INT_MASK_VALUE;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		    MGBE_MMC_IPC_RX_INT_MASK);
 
 	/* Enable common interrupt at wrapper level */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+#if 0
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			   intr_en[osi_core->mac]);
 	value |= MGBE_MAC_SBD_INTR;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		    intr_en[osi_core->mac]);
+#endif
 
 	if (osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
 		/* configure L3L4 filter index to be 48 in Rx desc2 */
 		value = osi_readla(osi_core,
-				   (u8 *)osi_core->base + MAC_PKT_FILTER_REG);
+				   (u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG);
 		value &= ~MGBE_MAC_PFR_DHLFRS_MASK;
 		value |= MGBE_MAC_PFR_DHLFRS;
 		osi_writela(osi_core, value,
-			    (u8 *)osi_core->base + MAC_PKT_FILTER_REG);
+			    (u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG);
 	}
 	/* Enable VLAN configuration */
 	value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_MAC_VLAN_TR);
+			   (u8 *)osi_core->mac_base + MGBE_MAC_VLAN_TR);
 	/* Enable VLAN Tag in RX Status
 	 * Disable double VLAN Tag processing on TX and RX
 	 */
@@ -2651,16 +2614,16 @@ static void mgbe_configure_mac(struct osi_core_priv_data *osi_core)
 #endif /* !OSI_STRIPPED_LIB */
 	value |= MGBE_MAC_VLANTR_EVLRXS | MGBE_MAC_VLANTR_DOVLTC;
 	osi_writela(osi_core, value,
-		    (u8 *)osi_core->base + MGBE_MAC_VLAN_TR);
+		    (u8 *)osi_core->mac_base + MGBE_MAC_VLAN_TR);
 
 	value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_MAC_VLANTIR);
+			   (u8 *)osi_core->mac_base + MGBE_MAC_VLANTIR);
 	/* Enable VLAN tagging through context descriptor */
 	value |= MGBE_MAC_VLANTIR_VLTI;
 	/* insert/replace C_VLAN in 13th & 14th bytes of transmitted frames */
 	value &= ~MGBE_MAC_VLANTIRR_CSVL;
 	osi_writela(osi_core, value,
-		    (u8 *)osi_core->base + MGBE_MAC_VLANTIR);
+		    (u8 *)osi_core->mac_base + MGBE_MAC_VLANTIR);
 }
 
 /**
@@ -2682,7 +2645,7 @@ static void mgbe_configure_mac(struct osi_core_priv_data *osi_core)
 static s32 mgbe_dma_indir_addr_write(struct osi_core_priv_data *osi_core,
 			u32 mode, u32 chan, u32 value)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	u32 ctrl = 0;
 	s32 ret = 0;
 	u32 val = 0U;
@@ -2768,8 +2731,8 @@ static s32 mgbe_configure_pdma(struct osi_core_priv_data *osi_core)
 		if (osi_core->pre_sil == OSI_ENABLE) {
 			max_txq_size = MGBE_TXQ_SIZE_UFPGA / OSI_MGBE_MAX_NUM_QUEUES;
 			if (osi_core->mtu > max_txq_size) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Invalid MTU related to Q size received in pre-sil case\n",
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Invalid MTU related to Q size received in pre-sil case:%u\n",
 					     osi_core->mtu);
 				ret = -1;
 				goto done;
@@ -2777,8 +2740,8 @@ static s32 mgbe_configure_pdma(struct osi_core_priv_data *osi_core)
 			adjusted_txq_size = max_txq_size - osi_core->mtu;
 			divided_txq_size = adjusted_txq_size / (MGBE_AXI_DATAWIDTH / 8U);
 			if (divided_txq_size < 5U) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Invalid MTU received in pre-sil case\n",
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Invalid MTU received in pre-sil case:%u\n",
 					     osi_core->mtu);
 				ret = -1;
 				goto done;
@@ -2791,8 +2754,8 @@ static s32 mgbe_configure_pdma(struct osi_core_priv_data *osi_core)
 		} else {
 			max_txq_size = MGBE_TXQ_SIZE / OSI_MGBE_MAX_NUM_QUEUES;
 			if (osi_core->mtu > max_txq_size) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Invalid MTU related to Q size received in silicon case\n",
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Invalid MTU related to Q size received in silicon case:%u\n",
 					     osi_core->mtu);
 				ret = -1;
 				goto done;
@@ -2800,8 +2763,8 @@ static s32 mgbe_configure_pdma(struct osi_core_priv_data *osi_core)
 			adjusted_txq_size = max_txq_size - osi_core->mtu;
 			divided_txq_size = adjusted_txq_size / (MGBE_AXI_DATAWIDTH / 8U);
 			if (divided_txq_size < 5U) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Invalid MTU received in silicon case\n",
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Invalid MTU received in silicon case:%u\n",
 					     osi_core->mtu);
 				ret = -1;
 				goto done;
@@ -2815,8 +2778,8 @@ static s32 mgbe_configure_pdma(struct osi_core_priv_data *osi_core)
 		ret = mgbe_dma_indir_addr_write(osi_core,
 				MGBE_PDMA_CHX_TX_EXTCFG, pdma_chan, value);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"MGBE_PDMA_CHX_TX_EXTCFG failed\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				"MGBE_PDMA_CHX_TX_EXTCFG failed:%u\n", ret);
 			goto done;
 		}
 		/* Update PDMA_CH(#i)_RxExtCfg register */
@@ -2837,8 +2800,8 @@ static s32 mgbe_configure_pdma(struct osi_core_priv_data *osi_core)
 		ret = mgbe_dma_indir_addr_write(osi_core,
 				MGBE_PDMA_CHX_RX_EXTCFG, pdma_chan, value);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"MGBE_PDMA_CHX_RX_EXTCFG failed\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				"MGBE_PDMA_CHX_RX_EXTCFG failed:%u\n", ret);
 			goto done;
 		}
 
@@ -2859,31 +2822,31 @@ static s32 mgbe_configure_pdma(struct osi_core_priv_data *osi_core)
 			ret = mgbe_dma_indir_addr_write(osi_core,
 				MGBE_VDMA_CHX_TX_DESC_CTRL, vdma_chan, value);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				  "MGBE_VDMA_CHX_TX_DESC_CTRL failed\n", 0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+				  "MGBE_VDMA_CHX_TX_DESC_CTRL failed\n");
 				goto done;
 			}
 			ret = mgbe_dma_indir_addr_write(osi_core,
 				MGBE_VDMA_CHX_RX_DESC_CTRL, vdma_chan, value);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				  "MGBE_VDMA_CHX_RX_DESC_CTRL failed\n", 0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+				  "MGBE_VDMA_CHX_RX_DESC_CTRL failed\n");
 				goto done;
 			}
 		}
 	}
 
 	value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_DMA_MODE);
+			   (u8 *)osi_core->mac_base + MGBE_DMA_MODE);
 	/* set DMA_Mode register DSCB bit */
 	value |= MGBE_DMA_MODE_DSCB;
-	osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_DMA_MODE);
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_DMA_MODE);
 	/* poll for Tx/Rx Dcache calculations complete and fixed */
-	ret = poll_check(osi_core, (u8 *)osi_core->base + MGBE_DMA_MODE,
+	ret = poll_check(osi_core, (u8 *)osi_core->mac_base + MGBE_DMA_MODE,
 			 MGBE_DMA_MODE_DSCB, &value);
 	if (ret == -1) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "MGBE_DMA_MODE_DSCB timeout\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "MGBE_DMA_MODE_DSCB timeout\n");
 	}
 
 done:
@@ -2924,21 +2887,21 @@ static s32 mgbe_configure_dma(struct osi_core_priv_data *osi_core)
 	value |= MGBE_DMA_SBUS_WR_OSR_LMT;
 
 	osi_writela(osi_core, value,
-		    (u8 *)osi_core->base + MGBE_DMA_SBUS);
+		    (u8 *)osi_core->mac_base + MGBE_DMA_SBUS);
 	if (osi_core->mac == OSI_MAC_HW_MGBE) {
 		/* Configure TDPS to 5 */
 		value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_DMA_TX_EDMA_CTRL);
+			   (u8 *)osi_core->mac_base + MGBE_DMA_TX_EDMA_CTRL);
 		value |= MGBE_DMA_TX_EDMA_CTRL_TDPS;
 		osi_writela(osi_core, value,
-			(u8 *)osi_core->base + MGBE_DMA_TX_EDMA_CTRL);
+			(u8 *)osi_core->mac_base + MGBE_DMA_TX_EDMA_CTRL);
 
 		/* Configure RDPS to 5 */
 		value = osi_readla(osi_core,
-			   (u8 *)osi_core->base + MGBE_DMA_RX_EDMA_CTRL);
+			   (u8 *)osi_core->mac_base + MGBE_DMA_RX_EDMA_CTRL);
 		value |= MGBE_DMA_RX_EDMA_CTRL_RDPS;
 		osi_writela(osi_core, value,
-			(u8 *)osi_core->base + MGBE_DMA_RX_EDMA_CTRL);
+			(u8 *)osi_core->mac_base + MGBE_DMA_RX_EDMA_CTRL);
 	}
         /* configure MGBE PDMA */
 	if (osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
@@ -2962,6 +2925,7 @@ done:
  * @retval 0 on success
  * @retval -1 on failure.
  */
+#if 0
 static s32 mgbe_dma_chan_to_vmirq_map(struct osi_core_priv_data *osi_core)
 {
 #ifndef OSI_STRIPPED_LIB
@@ -2985,25 +2949,25 @@ static s32 mgbe_dma_chan_to_vmirq_map(struct osi_core_priv_data *osi_core)
 			chan = irq_data->vm_chans[j];
 
 			if (chan >= l_core->num_max_chans) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
+				OSI_CORE_ERR(osi_core->osd, 
 					     "Invalid channel number\n", chan);
 				ret = -1;
 				goto exit;
 			}
 
-			osi_writel(OSI_BIT(irq_data->vm_num),
-				   (u8 *)osi_core->base +
+			osi_writela(osi_core, OSI_BIT(irq_data->vm_num),
+				   (u8 *)osi_core->mac_base +
 				   MGBE_VIRT_INTR_APB_CHX_CNTRL(chan));
 		}
-		osi_writel(OSI_BIT(irq_data->vm_num),
-			   (u8 *)osi_core->base + MGBE_VIRTUAL_APB_ERR_CTRL);
+		osi_writela(osi_core, OSI_BIT(irq_data->vm_num),
+			   (u8 *)osi_core->mac_base + MGBE_VIRTUAL_APB_ERR_CTRL);
 	}
 
 #ifndef OSI_STRIPPED_LIB
 	if ((osi_core->use_virtualization == OSI_DISABLE) &&
 	    (osi_core->hv_base != OSI_NULL)) {
 		if (osi_core->instance_id > 3U) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
+			OSI_CORE_ERR(osi_core->osd, 
 				     "Wrong MAC instance-ID\n",
 				     osi_core->instance_id);
 			ret = -1;
@@ -3023,7 +2987,7 @@ static s32 mgbe_dma_chan_to_vmirq_map(struct osi_core_priv_data *osi_core)
 exit:
 	return ret;
 }
-
+#endif
 
 /**
  * @brief mgbe_core_init - MGBE MAC, MTL and common DMA Initialization
@@ -3035,7 +2999,7 @@ exit:
  * @param[in] osi_core: OSI core private data structure.
  *
  * @note 1) MAC should be out of reset. See osi_poll_for_swr() for details.
- *	 2) osi_core->base needs to be filled based on ioremap.
+ *	 2) osi_core->mac_base needs to be filled based on ioremap.
  *	 3) osi_core->num_mtl_queues needs to be filled.
  *	 4) osi_core->mtl_queues[qinx] need to be filled.
  *
@@ -3049,37 +3013,37 @@ static s32 mgbe_core_init(struct osi_core_priv_data *const osi_core)
 	u32 value = 0;
 
 	/* reset mmc counters */
-	osi_writela(osi_core, MGBE_MMC_CNTRL_CNTRST, (u8 *)osi_core->base +
+	osi_writela(osi_core, MGBE_MMC_CNTRL_CNTRST, (u8 *)osi_core->mac_base +
 		   MGBE_MMC_CNTRL);
 
 	/* Mapping MTL Rx queue and DMA Rx channel */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_RXQ_DMA_MAP0);
 	value |= MGBE_RXQ_TO_DMA_CHAN_MAP0;
 	value |= MGBE_RXQ_TO_DMA_MAP_DDMACH;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_RXQ_DMA_MAP0);
 
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_RXQ_DMA_MAP1);
 	value |= MGBE_RXQ_TO_DMA_CHAN_MAP1;
 	value |= MGBE_RXQ_TO_DMA_MAP_DDMACH;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_RXQ_DMA_MAP1);
 
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_RXQ_DMA_MAP2);
 	value |= MGBE_RXQ_TO_DMA_CHAN_MAP2;
 	value |= MGBE_RXQ_TO_DMA_MAP_DDMACH;
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_RXQ_DMA_MAP2);
 	/* T264 DDS bit moved */
 	if (osi_core->mac != OSI_MAC_HW_MGBE_T26X) {
 		/* Enable DDS in MAC_Extended_Configuration */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  MGBE_MAC_EXT_CNF);
 		value |= MGBE_MAC_EXT_CNF_DDS;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			   MGBE_MAC_EXT_CNF);
 	}
 	/* Configure MTL Queues */
@@ -3126,12 +3090,14 @@ static s32 mgbe_core_init(struct osi_core_priv_data *const osi_core)
 	osi_core->l3l4_filter_bitmask = OSI_NONE;
 #endif /* !L3L4_WILDCARD_FILTER */
 
+#if 0
 	ret = mgbe_dma_chan_to_vmirq_map(osi_core);
 	//TBD: debugging reset mmc counters for T264
 	if (osi_core->pre_sil == OSI_ENABLE) {
 		//TODO: removed in tot dev-main
 		//mgbe_reset_mmc(osi_core);
 	}
+#endif
 	osi_memset(&osi_core->rch_index, 0,
 		   sizeof(struct rchlist_index)*RCHLIST_SIZE);
 fail:
@@ -3156,7 +3122,7 @@ static void mgbe_handle_mac_fpe_intrs(struct osi_core_priv_data *osi_core)
 
 	/* interrupt bit clear on read as CSR_SW is reset */
 	val = osi_readla(osi_core, (u8 *)
-			 osi_core->base + MGBE_MAC_FPE_CTS);
+			 osi_core->mac_base + MGBE_MAC_FPE_CTS);
 	if (val != 0U ) {
 		osi_core->mac_common_intr_rcvd = OSI_ENABLE;
 	}
@@ -3193,7 +3159,7 @@ static void mgbe_handle_mac_fpe_intrs(struct osi_core_priv_data *osi_core)
 	}
 
 	osi_writela(osi_core, val, (u8 *)
-		    osi_core->base + MGBE_MAC_FPE_CTS);
+		    osi_core->mac_base + MGBE_MAC_FPE_CTS);
 }
 
 /**
@@ -3223,7 +3189,7 @@ static void mgbe_handle_link_change_and_fpe_intrs(struct osi_core_priv_data *osi
 {
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	u32 mac_ier = 0;
-	u8 *base = (u8 *)osi_core->base;
+	u8 *base = (u8 *)osi_core->mac_base;
 	u32 value = 0U;
 #ifdef HSI_SUPPORT
 	const u32 fsm[2] = {(MGBE_SNPS_SCS_REG1_TRCFSM | MGBE_SNPS_SCS_REG1_RPERXLPIFSM),
@@ -3236,6 +3202,8 @@ static void mgbe_handle_link_change_and_fpe_intrs(struct osi_core_priv_data *osi
 
 	/* Check for Link status change interrupt */
 	if ((mac_isr & MGBE_MAC_ISR_LSI) == OSI_ENABLE) {
+		//link status change
+		OSI_CORE_ERR(osi_core->osd,  "link status change\n");
 		/* For Local fault need to stop network data and restart the LANE bringup */
 		if ((mac_isr & MGBE_MAC_ISR_LS_MASK) == MGBE_MAC_ISR_LS_LOCAL_FAULT) {
 			/* Disable the Link Status interrupt before the lane_restart_task,
@@ -3243,9 +3211,9 @@ static void mgbe_handle_link_change_and_fpe_intrs(struct osi_core_priv_data *osi
 			 * The Link Status interrupt will be enabled by hw_set_speed
 			 * which is called after lane bring up task
 			 */
-			value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_IER);
+			value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 			value &= ~MGBE_IMR_RGSMIIIE;
-			osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_MAC_IER);
+			osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 
 			/* Mark that UPHY lane is down */
 			l_core->lane_status = OSI_DISABLE;
@@ -3258,16 +3226,16 @@ static void mgbe_handle_link_change_and_fpe_intrs(struct osi_core_priv_data *osi
 #endif /* HSI_SUPPORT */
 
 			/* re-enable interrupt */
-			value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_IER);
+			value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 			value |= MGBE_IMR_RGSMIIIE;
-			osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_MAC_IER);
+			osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 		} else {
 			/* Do nothing */
 		}
 
 #ifdef HSI_SUPPORT
 		osi_writela(osi_core, fsm[link_ok],
-			    (u8 *)osi_core->base + MGBE_SNPS_SCS_REG1);
+			    (u8 *)osi_core->mac_base + MGBE_SNPS_SCS_REG1);
 #endif /* HSI_SUPPORT */
 	}
 
@@ -3294,7 +3262,7 @@ static void mgbe_handle_mac_intrs(struct osi_core_priv_data *osi_core)
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	u32 mac_isr = 0;
 	u32 tx_errors = 0;
-	u8 *base = (u8 *)osi_core->base;
+	u8 *base = (u8 *)osi_core->mac_base;
 	u32 pktid = 0U;
 #ifdef HSI_SUPPORT
 	u64 tx_frame_err = 0;
@@ -3313,7 +3281,7 @@ static void mgbe_handle_mac_intrs(struct osi_core_priv_data *osi_core)
 		/* Check for the type of Tx error by reading  MAC_Rx_Tx_Status
 		 * register
 		 */
-		tx_errors = osi_readl(base + MGBE_MAC_RX_TX_STS);
+		tx_errors = osi_readla(osi_core, base + MGBE_MAC_RX_TX_STS);
 #ifndef OSI_STRIPPED_LIB
 		if ((tx_errors & MGBE_MAC_TX_TJT) == MGBE_MAC_TX_TJT) {
 			/* increment Tx Jabber timeout stats */
@@ -3380,8 +3348,8 @@ static void mgbe_handle_mac_intrs(struct osi_core_priv_data *osi_core)
 				/* Remove oldest stale TS from list to make
 				 * space for new TS
 				 */
-				OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_INVALID),
-					      ("Removing TS from queue pkt_id\n"),
+				OSI_CORE_INFO((osi_core->osd),
+					      ("Removing TS from queue pkt_id: %u\n"),
 					      (temp->pkt_id));
 
 				temp->in_use = OSI_DISABLE;
@@ -3390,8 +3358,8 @@ static void mgbe_handle_mac_intrs(struct osi_core_priv_data *osi_core)
 				temp->prev->next =  temp->next;
 				i = get_free_ts_idx(l_core);
 				if (i == MAX_TX_TS_CNT) {
-					OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-						     "TS queue is full\n", i);
+					OSI_CORE_ERR(osi_core->osd, 
+						     "TS queue is full:%u\n", i);
 					break;
 				}
 			}
@@ -3472,49 +3440,48 @@ static s32 validate_avb_args(struct osi_core_priv_data *const osi_core,
 
 	/* queue index in range */
 	if (avb->qindex >= OSI_MGBE_MAX_NUM_QUEUES) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid Queue index\n",
-			(u64)avb->qindex);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid Queue index:%u\n",
+			avb->qindex);
 		goto done;
 	}
 
 	/* queue oper_mode in range check*/
 	if (avb->oper_mode >= OSI_MTL_QUEUE_MODEMAX) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid Queue mode\n",
-			(u64)avb->qindex);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid Queue mode:%u\n",
+			avb->oper_mode);
 		goto done;
 	}
 
 	/* Validate algo is valid  */
 	if (avb->algo > OSI_MTL_TXQ_AVALG_CBS) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid Algo input\n",
-			(u64)avb->algo);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid Algo input:%u\n",
+			avb->algo);
 		goto done;
 	}
 
 	/* can't set AVB mode for queue 0 */
 	if ((avb->qindex == 0U) && (avb->oper_mode == OSI_MTL_QUEUE_AVB)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_OPNOTSUPP,
-			"Not allowed to set AVB for Q0\n",
-			(u64)avb->qindex);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Not allowed to set AVB for Q0\n");
 		goto done;
 	}
 
 	/* TC index range check */
 	if ((avb->tcindex == 0U) || (avb->tcindex >= OSI_MAX_TC_NUM)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid Queue TC mapping\n",
-			(u64)avb->tcindex);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid Queue TC mapping:%u\n",
+			avb->tcindex);
 		goto done;
 	}
 
 	/* Check for CC */
 	if (avb->credit_control > OSI_ENABLE) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid credit control\n",
-			(u64)avb->credit_control);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid credit control:%u\n",
+			avb->credit_control);
 		goto done;
 	}
 
@@ -3564,7 +3531,7 @@ static s32 mgbe_set_avb_algorithm(struct osi_core_priv_data *const osi_core,
 
 	qinx = avb->qindex;
 	tcinx = avb->tcindex;
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_CHX_TX_OP_MODE(qinx));
 	value &= ~MGBE_MTL_TX_OP_MODE_TXQEN;
 	/* Set TXQEN mode as per input struct after masking 3 bit */
@@ -3576,11 +3543,11 @@ static s32 mgbe_set_avb_algorithm(struct osi_core_priv_data *const osi_core,
 		value |= ((tcinx << MGBE_MTL_TX_OP_MODE_Q2TCMAP_SHIFT) &
 			  MGBE_MTL_TX_OP_MODE_Q2TCMAP);
 	}
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_CHX_TX_OP_MODE(qinx));
 
 	/* Set Algo and Credit control */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_TCQ_ETS_CR(tcinx));
 	value &= ~MGBE_MTL_TCQ_ETS_CR_AVALG;
 	value &= ~MGBE_MTL_TCQ_ETS_CR_CC;
@@ -3593,54 +3560,54 @@ static s32 mgbe_set_avb_algorithm(struct osi_core_priv_data *const osi_core,
 		value |= (OSI_MGBE_TXQ_AVALG_ETS << MGBE_MTL_TCQ_ETS_CR_AVALG_SHIFT) &
 			  MGBE_MTL_TCQ_ETS_CR_AVALG;
 	}
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		   MGBE_MTL_TCQ_ETS_CR(tcinx));
 
 	if (avb->algo == OSI_MTL_TXQ_AVALG_CBS) {
 		/* Set Idle slope credit*/
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  MGBE_MTL_TCQ_QW(tcinx));
 		value &= ~MGBE_MTL_TCQ_ETS_QW_ISCQW_MASK;
 		value |= avb->idle_slope & MGBE_MTL_TCQ_ETS_QW_ISCQW_MASK;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_TCQ_QW(tcinx));
 
 		/* Set Send slope credit */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  MGBE_MTL_TCQ_ETS_SSCR(tcinx));
 		value &= ~MGBE_MTL_TCQ_ETS_SSCR_SSC_MASK;
 		value |= avb->send_slope & MGBE_MTL_TCQ_ETS_SSCR_SSC_MASK;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_TCQ_ETS_SSCR(tcinx));
 
 		/* Set Hi credit */
 		value = avb->hi_credit & MGBE_MTL_TCQ_ETS_HCR_HC_MASK;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_TCQ_ETS_HCR(tcinx));
 
 		/* low credit  is -ve number, osi_write need a u32
 		 * take only 28:0 bits from avb->low_credit
 		 */
 		value = avb->low_credit & MGBE_MTL_TCQ_ETS_LCR_LC_MASK;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_TCQ_ETS_LCR(tcinx));
 	} else {
 		/* Reset register values to POR/initialized values */
-		osi_writela(osi_core, MGBE_MTL_TCQ_QW_ISCQW, (u8 *)osi_core->base +
+		osi_writela(osi_core, MGBE_MTL_TCQ_QW_ISCQW, (u8 *)osi_core->mac_base +
 			    MGBE_MTL_TCQ_QW(tcinx));
-		osi_writela(osi_core, OSI_DISABLE, (u8 *)osi_core->base +
+		osi_writela(osi_core, OSI_DISABLE, (u8 *)osi_core->mac_base +
 			    MGBE_MTL_TCQ_ETS_SSCR(tcinx));
-		osi_writela(osi_core, OSI_DISABLE, (u8 *)osi_core->base +
+		osi_writela(osi_core, OSI_DISABLE, (u8 *)osi_core->mac_base +
 			    MGBE_MTL_TCQ_ETS_HCR(tcinx));
-		osi_writela(osi_core, OSI_DISABLE, (u8 *)osi_core->base +
+		osi_writela(osi_core, OSI_DISABLE, (u8 *)osi_core->mac_base +
 			    MGBE_MTL_TCQ_ETS_LCR(tcinx));
 		if (osi_core->mac == OSI_MAC_HW_MGBE) {
 			/* Q2TCMAP is reserved for T26x */
-			value = osi_readla(osi_core, (u8 *)osi_core->base +
+			value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					   MGBE_MTL_CHX_TX_OP_MODE(qinx));
 			value &= ~MGBE_MTL_TX_OP_MODE_Q2TCMAP;
 			value |= (osi_core->tc[qinx] << MGBE_MTL_CHX_TX_OP_MODE_Q2TC_SH);
-			osi_writela(osi_core, value, (u8 *)osi_core->base +
+			osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 					MGBE_MTL_CHX_TX_OP_MODE(qinx));
 		}
 	}
@@ -3682,24 +3649,23 @@ static s32 mgbe_get_avb_algorithm(struct osi_core_priv_data *const osi_core,
 	u32 tcinx = 0U;
 
 	if (osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_OPNOTSUPP,
-			"Not supported for T26x\n",
-			0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Not supported for T26x\n");
 		ret = -1;
 		goto fail;
 	}
 
 	if ((avb->qindex >= OSI_MGBE_MAX_NUM_QUEUES) ||
 	    (avb->qindex == OSI_NONE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid Queue index\n",
-			(u64)avb->qindex);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid Queue index:%u\n",
+			avb->qindex);
 		ret = -1;
 		goto fail;
 	}
 
 	qinx = avb->qindex;
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_CHX_TX_OP_MODE(qinx));
 
 	/* Get TxQ/TC mode as per input struct after masking 3:2 bit */
@@ -3712,7 +3678,7 @@ static s32 mgbe_get_avb_algorithm(struct osi_core_priv_data *const osi_core,
 	tcinx = avb->tcindex;
 
 	/* Get Algo and Credit control */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			  MGBE_MTL_TCQ_ETS_CR(tcinx));
 	avb->credit_control = (value & MGBE_MTL_TCQ_ETS_CR_CC) >>
 			       MGBE_MTL_TCQ_ETS_CR_CC_SHIFT;
@@ -3721,24 +3687,24 @@ static s32 mgbe_get_avb_algorithm(struct osi_core_priv_data *const osi_core,
 
 	if (avb->algo == OSI_MTL_TXQ_AVALG_CBS) {
 		/* Get Idle slope credit*/
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  MGBE_MTL_TCQ_QW(tcinx));
 		avb->idle_slope = value & MGBE_MTL_TCQ_ETS_QW_ISCQW_MASK;
 
 		/* Get Send slope credit */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  MGBE_MTL_TCQ_ETS_SSCR(tcinx));
 		avb->send_slope = value & MGBE_MTL_TCQ_ETS_SSCR_SSC_MASK;
 
 		/* Get Hi credit */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  MGBE_MTL_TCQ_ETS_HCR(tcinx));
 		avb->hi_credit = value & MGBE_MTL_TCQ_ETS_HCR_HC_MASK;
 
 		/* Get Low credit for which bit 31:29 are unknown
 		 * return 28:0 valid bits to application
 		 */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  MGBE_MTL_TCQ_ETS_LCR(tcinx));
 		avb->low_credit = value & MGBE_MTL_TCQ_ETS_LCR_LC_MASK;
 	}
@@ -3769,7 +3735,7 @@ static void mgbe_handle_cgce_hlbs_hlbf(struct osi_core_priv_data *osi_core, u32 
 		osi_core->stats.head_of_line_blk_sch =
 				osi_update_stats_counter(stat_val, 1U);
 		/* Need to read MTL_EST_Sch_Error register and cleared */
-		sch_err = osi_readla(osi_core, (u8 *)osi_core->base +
+		sch_err = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				    MGBE_MTL_EST_SCH_ERR);
 		for (i = 0U; i < OSI_MAX_TC_NUM; i++) {
 			temp = OSI_ENABLE;
@@ -3781,16 +3747,16 @@ static void mgbe_handle_cgce_hlbs_hlbf(struct osi_core_priv_data *osi_core, u32 
 			}
 		}
 		sch_err &= 0xFFU; //only 8 TC allowed so clearing all
-		osi_writela(osi_core, sch_err, (u8 *)osi_core->base +
+		osi_writela(osi_core, sch_err, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_EST_SCH_ERR);
 		/* Reset EST with prs32 to configure it properly */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				 MGBE_MTL_EST_CONTROL);
 		value &= ~MGBE_MTL_EST_EEST;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			    MGBE_MTL_EST_CONTROL);
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Disabling EST due to HLBS, correct GCL\n", OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Disabling EST due to HLBS, correct GCL\n");
 	}
 
 	if ((val & MGBE_MTL_EST_STATUS_HLBF) == MGBE_MTL_EST_STATUS_HLBF) {
@@ -3799,7 +3765,7 @@ static void mgbe_handle_cgce_hlbs_hlbf(struct osi_core_priv_data *osi_core, u32 
 		osi_core->stats.head_of_line_blk_frm =
 				osi_update_stats_counter(stat_val, 1U);
 		/* Need to read MTL_EST_Frm_Size_Error register and cleared */
-		frm_err = osi_readla(osi_core, (u8 *)osi_core->base +
+		frm_err = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				    MGBE_MTL_EST_FRMS_ERR);
 		for (i = 0U; i < OSI_MAX_TC_NUM; i++) {
 			temp = OSI_ENABLE;
@@ -3811,21 +3777,20 @@ static void mgbe_handle_cgce_hlbs_hlbf(struct osi_core_priv_data *osi_core, u32 
 			}
 		}
 		frm_err &= 0xFFU; //only 8 TC allowed so clearing all
-		osi_writela(osi_core, frm_err, (u8 *)osi_core->base +
+		osi_writela(osi_core, frm_err, (u8 *)osi_core->mac_base +
 			   MGBE_MTL_EST_FRMS_ERR);
 
 		/* Reset EST with prs32 to configure it properly */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				   MGBE_MTL_EST_CONTROL);
 		/* DDBF 1 means don't drop packets */
 		if ((value & MGBE_MTL_EST_CONTROL_DDBF) ==
 		    MGBE_MTL_EST_CONTROL_DDBF) {
 			value &= ~MGBE_MTL_EST_EEST;
-			osi_writela(osi_core, value, (u8 *)osi_core->base +
+			osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 				    MGBE_MTL_EST_CONTROL);
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "Disabling EST due to HLBF, correct GCL\n",
-				     OSI_NONE);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Disabling EST due to HLBF, correct GCL\n");
 		}
 	}
 }
@@ -3862,7 +3827,7 @@ static void mgbe_handle_mtl_intrs(struct osi_core_priv_data *osi_core,
 		qinx = osi_core->mtl_queues[i];
 		if ((mtl_isr & OSI_BIT(qinx)) ==  OSI_BIT(qinx)) {
 			/* check if Q has underflow error */
-			qstatus = osi_readl((u8 *)osi_core->base +
+			qstatus = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					    MGBE_MTL_QINT_STATUS(qinx));
 			if (qstatus != 0U ) {
 				osi_core->mac_common_intr_rcvd = OSI_ENABLE;
@@ -3877,7 +3842,7 @@ static void mgbe_handle_mtl_intrs(struct osi_core_priv_data *osi_core,
 #endif /* !OSI_STRIPPED_LIB */
 			}
 			/* Clear interrupt status by writing back with 1 */
-			osi_writel(1U, (u8 *)osi_core->base +
+			osi_writela(osi_core, 1U, (u8 *)osi_core->mac_base +
 				   MGBE_MTL_QINT_STATUS(qinx));
 		}
 	}
@@ -3887,7 +3852,7 @@ static void mgbe_handle_mtl_intrs(struct osi_core_priv_data *osi_core,
 	}
 
 	val = osi_readla(osi_core,
-			 (u8 *)osi_core->base + MGBE_MTL_EST_STATUS);
+			 (u8 *)osi_core->mac_base + MGBE_MTL_EST_STATUS);
 	val &= (MGBE_MTL_EST_STATUS_CGCE | MGBE_MTL_EST_STATUS_HLBS |
 		MGBE_MTL_EST_STATUS_HLBF | MGBE_MTL_EST_STATUS_BTRE |
 		MGBE_MTL_EST_STATUS_SWLC);
@@ -3922,7 +3887,7 @@ static void mgbe_handle_mtl_intrs(struct osi_core_priv_data *osi_core,
 	}
 	/* clear EST status register as interrupt is handled */
 	osi_writela(osi_core, val,
-		    (u8 *)osi_core->base + MGBE_MTL_EST_STATUS);
+		    (u8 *)osi_core->mac_base + MGBE_MTL_EST_STATUS);
 
 done:
 	return;
@@ -3949,7 +3914,7 @@ done:
 static s32 mgbe_config_ptp_offload(struct osi_core_priv_data *const osi_core,
 				       struct osi_pto_config *const pto_config)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	s32 ret = 0;
 	u32 value = 0x0U;
 	u32 ptc_value = 0x0U;
@@ -4044,17 +4009,15 @@ static void mgbe_handle_hsi_wrap_common_intr(struct osi_core_priv_data *osi_core
 	u32 val2 = 0;
 	u64 ce_count_threshold;
 	const u32 intr_en[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_WRAP_COMMON_INTR_ENABLE,
 		MGBE_T26X_WRAP_COMMON_INTR_ENABLE
 	};
 	const u32 intr_status[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_WRAP_COMMON_INTR_STATUS,
 		MGBE_T26X_WRAP_COMMON_INTR_STATUS
 	};
 
-	val = osi_readla(osi_core, (u8 *)osi_core->base +
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			intr_status[osi_core->mac]);
 	if (((val & MGBE_REGISTER_PARITY_ERR) == MGBE_REGISTER_PARITY_ERR) ||
 	    ((val & MGBE_CORE_UNCORRECTABLE_ERR) == MGBE_CORE_UNCORRECTABLE_ERR)) {
@@ -4062,11 +4025,11 @@ static void mgbe_handle_hsi_wrap_common_intr(struct osi_core_priv_data *osi_core
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.report_count_err[UE_IDX] = OSI_ENABLE;
 		/* Disable the interrupt */
-		val2 = osi_readla(osi_core, (u8 *)osi_core->base +
+		val2 = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				  intr_en[osi_core->mac]);
 		val2 &= ~MGBE_REGISTER_PARITY_ERR;
 		val2 &= ~MGBE_CORE_UNCORRECTABLE_ERR;
-		osi_writela(osi_core, val2, (u8 *)osi_core->base +
+		osi_writela(osi_core, val2, (u8 *)osi_core->mac_base +
 			    intr_en[osi_core->mac]);
 	}
 	if ((val & MGBE_CORE_CORRECTABLE_ERR) == MGBE_CORE_CORRECTABLE_ERR) {
@@ -4081,26 +4044,26 @@ static void mgbe_handle_hsi_wrap_common_intr(struct osi_core_priv_data *osi_core
 		}
 	}
 	val &= ~MGBE_MAC_SBD_INTR;
-	osi_writela(osi_core, val, (u8 *)osi_core->base +
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 		    intr_status[osi_core->mac]);
 
 	if (((val & MGBE_CORE_CORRECTABLE_ERR) == MGBE_CORE_CORRECTABLE_ERR) ||
 	    ((val & MGBE_CORE_UNCORRECTABLE_ERR) == MGBE_CORE_UNCORRECTABLE_ERR)) {
 		/* Clear status register for FSM errors. Clear on read*/
-		(void)osi_readla(osi_core, (u8 *)osi_core->base +
+		(void)osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MGBE_MAC_DPP_FSM_INTERRUPT_STATUS);
 
 		/* Clear status register for ECC error */
-		val = osi_readla(osi_core, (u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MGBE_MTL_ECC_INTERRUPT_STATUS);
 		if (val != 0U) {
-			osi_writela(osi_core, val, (u8 *)osi_core->base +
+			osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 					MGBE_MTL_ECC_INTERRUPT_STATUS);
 		}
-		val = osi_readla(osi_core, (u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MGBE_DMA_ECC_INTERRUPT_STATUS);
 		if (val != 0U) {
-			osi_writela(osi_core, val, (u8 *)osi_core->base +
+			osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 					MGBE_DMA_ECC_INTERRUPT_STATUS);
 		}
 	}
@@ -4125,12 +4088,10 @@ static void mgbe_handle_hsi_intr(struct osi_core_priv_data *osi_core)
 	void *xpcs_base = osi_core->xpcs_base;
 	u64 ce_count_threshold;
 	const u32 xpcs_intr_ctrl_reg[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		XPCS_WRAP_INTERRUPT_CONTROL,
 		T26X_XPCS_WRAP_INTERRUPT_CONTROL
 	};
 	const u32 xpcs_intr_sts_reg[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		XPCS_WRAP_INTERRUPT_STATUS,
 		T26X_XPCS_WRAP_INTERRUPT_STATUS
 	};
@@ -4198,82 +4159,62 @@ static void mgbe_check_intr_status(struct osi_core_priv_data *const osi_core)
 
 #ifndef OSI_STRIPPED_LIB
 	/* Read for MAC_LPI_Control_Status */
-	value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_LPI_CSR);
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_LPI_CSR);
 	if ((value & MGBE_MAC_LPI_STATUS_MASK) != 0U) {
 		osi_core->mac_common_intr_rcvd = OSI_ENABLE;
 	}
 #endif /* !OSI_STRIPPED_LIB */
 
 	/* Read for MDIO_Interrupt_Status */
-	value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_MDIO_INTR_STS);
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_MDIO_INTR_STS);
 	if (value != 0U) {
 		osi_core->mac_common_intr_rcvd = OSI_ENABLE;
 	}
 	/* Read for MAC_PCTH_Intr_Status */
-	value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_PCTH_INTR_STS);
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_PCTH_INTR_STS);
 	if (value != 0U) {
 		osi_core->mac_common_intr_rcvd = OSI_ENABLE;
 	}
 	/* Read for MAC_PCTW_Intr_Status */
-	value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_PCTW_INTR_STS);
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_PCTW_INTR_STS);
 	if (value != 0U) {
 		osi_core->mac_common_intr_rcvd = OSI_ENABLE;
 	}
 
 }
 
-/**
- * @brief mgbe_handle_common_intr - Handles common interrupt.
- *
- * @note
- * Algorithm: Clear common s32errupt source.
- *
- * @param[in] osi_core: OSI core private data structure.
- *
- * @note MAC should be init and started. see osi_start_mac()
- */
-static void mgbe_handle_common_intr(struct osi_core_priv_data *const osi_core)
+static void mgbe_handle_lpi_intr(struct core_local *l_core)
 {
-	struct core_local *l_core = (struct core_local *)(void *)osi_core;
-	const u32 intr_en[OSI_MAX_MAC_IP_TYPES] = {
-		0,
-		MGBE_WRAP_COMMON_INTR_ENABLE,
-		MGBE_T26X_WRAP_COMMON_INTR_ENABLE
-	};
-	const u32 intr_status[OSI_MAX_MAC_IP_TYPES] = {
-		0,
-		MGBE_WRAP_COMMON_INTR_STATUS,
-		MGBE_T26X_WRAP_COMMON_INTR_STATUS
-	};
-	void *base = osi_core->base;
-	u32 dma_isr_ch0_15 = 0;
-	u32 dma_isr_ch16_47 = 0;
-	u32 chan = 0;
-	u32 i = 0;
-	u32 dma_sr = 0;
-	u32 dma_ier = 0;
+	dev_err(l_core->osi_core.dev, "%s handle mgbe lpi interrupt\n", l_core->osi_core.if_name);
+}
+
+static void mgbe_handle_ue_intr(struct core_local *l_core)
+{
+	dev_err(l_core->osi_core.dev, "%s handle mgbe sfty-ue interrupt\n", l_core->osi_core.if_name);
+}
+
+static void mgbe_handle_re_intr(struct core_local *l_core)
+{
+	dev_err(l_core->osi_core.dev, "%s handle xpcs sfty-re interrupt\n", l_core->osi_core.if_name);
+}
+
+static void mgbe_handle_sbd_intr(struct osi_core_priv_data *const osi_core){
 	u32 mtl_isr = 0;
+	u32 dma_isr_ch0_15 = 0;
 	u32 val = 0;
+	void * base = osi_core->mac_base;
 
-#ifdef HSI_SUPPORT
-	if ((osi_core->hsi.enabled == OSI_ENABLE) && (osi_core->mac != OSI_MAC_HW_MGBE_T26X)) {
-		mgbe_handle_hsi_intr(osi_core);
-	}
-#endif
-	dma_isr_ch0_15 = osi_readla(osi_core, (u8 *)base +
-				    MGBE_DMA_ISR_CH0_15);
-	if (osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
-		dma_isr_ch16_47 = osi_readla(osi_core, (u8 *)base +
-					     MGBE_DMA_ISR_CH16_47);
-
-	}
-	if ((dma_isr_ch0_15 == OSI_NONE) && (dma_isr_ch16_47 == OSI_NONE)) {
+	dma_isr_ch0_15 = osi_readla(osi_core, (u8 *)base + MGBE_DMA_ISR_CH0_15);
+	if ((dma_isr_ch0_15 == 0)) {
 		goto done;
 	}
 
-	if (((dma_isr_ch0_15 & MGBE_DMA_ISR_DCH0_DCH15_MASK) != OSI_NONE) ||
-	    ((dma_isr_ch16_47 & MGBE_DMA_ISR_DCH16_DCH47_MASK) != OSI_NONE)) {
-		/* Handle Non-TI/RI s32errupts */
+#if 0
+	u32 dma_sr, dma_ier;
+	u32 i = 0, chan = 0;
+	struct core_local *l_core = (struct core_local *)(void *)osi_core;
+	if (((dma_isr_ch0_15 & MGBE_DMA_ISR_DCH0_DCH15_MASK) != OSI_NONE)) {
+		/* Handle Non-TI/RI nve32_terrupts */
 		for (i = 0; i < osi_core->num_dma_chans; i++) {
 			chan = osi_core->dma_chans[i];
 
@@ -4283,35 +4224,35 @@ static void mgbe_handle_common_intr(struct osi_core_priv_data *const osi_core)
 
 			/* read dma channel status register */
 			dma_sr = osi_readla(osi_core, (u8 *)base +
-					   MGBE_DMA_CHX_STATUS(chan));
-			/* read dma channel s32errupt enable register */
+					MGBE_DMA_CHX_STATUS(chan));
+			/* read dma channel nve32_terrupt enable register */
 			dma_ier = osi_readla(osi_core, (u8 *)base +
-					    MGBE_DMA_CHX_IER(chan));
+					MGBE_DMA_CHX_INTR_ENA(chan));
 
-			/* process only those s32errupts which we
+			/* process only those nve32_terrupts which we
 			 * have enabled.
 			 */
 			dma_sr = (dma_sr & dma_ier);
 
 			/* mask off RI and TI */
 			dma_sr &= ~(MGBE_DMA_CHX_STATUS_TI |
-				    MGBE_DMA_CHX_STATUS_RI);
+					MGBE_DMA_CHX_STATUS_RI);
 			if (dma_sr == OSI_NONE) {
 				continue;
 			}
 
-			/* ack non ti/ri s32s */
+			/* ack non ti/ri nve32_ts */
 			osi_writela(osi_core, dma_sr, (u8 *)base +
-				   MGBE_DMA_CHX_STATUS(chan));
+					MGBE_DMA_CHX_STATUS(chan));
 #ifndef OSI_STRIPPED_LIB
 			mgbe_update_dma_sr_stats(osi_core, dma_sr, chan);
 #endif /* !OSI_STRIPPED_LIB */
 		}
 	}
-
+#endif
 	/* Handle MAC interrupts */
 	if ((dma_isr_ch0_15 & MGBE_DMA_ISR_MACIS) == MGBE_DMA_ISR_MACIS) {
-		mgbe_handle_mac_intrs(osi_core);
+			mgbe_handle_mac_intrs(osi_core);
 	}
 
 	/* Handle MTL inerrupts */
@@ -4325,13 +4266,12 @@ static void mgbe_handle_common_intr(struct osi_core_priv_data *const osi_core)
 	mgbe_check_intr_status(osi_core);
 
 	/* Clear common interrupt status in wrapper register */
-	osi_writela(osi_core, MGBE_MAC_SBD_INTR,
-		   (u8 *)base + intr_status[osi_core->mac]);
-	val = osi_readla(osi_core, (u8 *)osi_core->base +
-			intr_en[osi_core->mac]);
+	//TODO: need modify this process
+
+	osi_writela(osi_core, MGBE_MAC_SBD_INTR, (u8 *)base + MGBE_MAC_ISR);
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 	val |= MGBE_MAC_SBD_INTR;
-	osi_writela(osi_core, val, (u8 *)osi_core->base +
-		   intr_en[osi_core->mac]);
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 
 	/* Clear FRP Interrupts in MTL_RXP_Interrupt_Control_Status */
 	val = osi_readla(osi_core, (u8 *)base + MGBE_MTL_RXP_INTR_CS);
@@ -4340,19 +4280,41 @@ static void mgbe_handle_common_intr(struct osi_core_priv_data *const osi_core)
 		MGBE_MTL_RXP_INTR_CS_FOOVIS |
 		MGBE_MTL_RXP_INTR_CS_PDRFIS);
 	osi_writela(osi_core, val, (u8 *)base + MGBE_MTL_RXP_INTR_CS);
-#ifdef HSI_SUPPORT
-	/* if interrupt is not from any of the below conditions then notify error */
-	if ((osi_core->hsi.enabled == OSI_ENABLE) &&
-	    !((dma_sr != 0U) || (dma_isr_ch0_15 != 0U) || (dma_isr_ch16_47 != 0U)
-		|| (mtl_isr != 0U) || (val != 0U) || (osi_core->mac_common_intr_rcvd != 0U))) {
-		osi_core->hsi.err_code[MAC_CMN_INTR_ERR_IDX] = OSI_MAC_CMN_INTR_ERR;
-		osi_core->hsi.report_err = OSI_ENABLE;
-		osi_core->hsi.report_count_err[MAC_CMN_INTR_ERR_IDX] = OSI_ENABLE;
-		osi_core->mac_common_intr_rcvd = OSI_DISABLE;
-	}
-#endif
 
 done:
+	return;
+}
+
+/**
+ * @brief mgbe_handle_common_intr - Handles common interrupt.
+ *
+ * @note
+ * Algorithm: Clear common s32errupt source.
+ *
+ * @param[in] osi_core: OSI core private data structure.
+ *
+ * @note MAC should be init and started. see osi_start_mac()
+ */
+static void mgbe_handle_common_intr(struct osi_core_priv_data *const osi_core, u32 irq_id)
+{
+	struct core_local *l_core = (struct core_local *)(void *)osi_core;
+
+	switch(irq_id){
+		case MAC_IRQ_LPI:
+			mgbe_handle_lpi_intr(l_core);
+			break;
+		case MAC_IRQ_SBD:
+			mgbe_handle_sbd_intr(osi_core);
+			break;
+		case MAC_IRQ_UE:
+			mgbe_handle_ue_intr(l_core);
+			break;
+		case MAC_IRQ_RE:
+			mgbe_handle_re_intr(l_core);
+			break;
+		default:
+			break;
+	}
 	return;
 }
 
@@ -4390,7 +4352,7 @@ static void mgbe_config_mac_tx(struct osi_core_priv_data *const osi_core,
 				const u32 enable)
 {
 	u32 value;
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 
 	if (enable == OSI_ENABLE) {
 		value = osi_readla(osi_core, (u8 *)addr + MGBE_MAC_TMCR);
@@ -4433,7 +4395,7 @@ static s32 mgbe_mdio_busy_wait(struct osi_core_priv_data *const osi_core)
 		count++;
 
 		mac_gmiiar = osi_readla(osi_core, (u8 *)
-					osi_core->base + MGBE_MDIO_SCCD);
+					osi_core->mac_base + MGBE_MDIO_SCCD);
 		if ((mac_gmiiar & MGBE_MDIO_SCCD_SBUSY) == 0U) {
 			cond = 0;
 		} else {
@@ -4472,9 +4434,7 @@ static s32 mgbe_write_phy_reg(struct osi_core_priv_data *const osi_core,
 	ret = mgbe_mdio_busy_wait(osi_core);
 	if (ret < 0) {
 		OSI_CORE_ERR(osi_core->osd,
-			OSI_LOG_ARG_HW_FAIL,
-			"MII operation timed out\n",
-			0ULL);
+			"MII operation timed out\n");
 		goto fail;
 	}
 
@@ -4486,7 +4446,7 @@ static s32 mgbe_write_phy_reg(struct osi_core_priv_data *const osi_core,
 	reg |= (phyaddr << MGBE_MDIO_SCCA_PA_SHIFT) |
 		(phyreg & MGBE_MDIO_SCCA_RA_MASK);
 	osi_writela(osi_core, reg, (u8 *)
-		    osi_core->base + MGBE_MDIO_SCCA);
+		    osi_core->mac_base + MGBE_MDIO_SCCA);
 
 	/* Program Data register */
 	reg = phydata |
@@ -4501,15 +4461,13 @@ static s32 mgbe_write_phy_reg(struct osi_core_priv_data *const osi_core,
 	}
 
 	osi_writela(osi_core, reg, (u8 *)
-		    osi_core->base + MGBE_MDIO_SCCD);
+		    osi_core->mac_base + MGBE_MDIO_SCCD);
 
 	/* wait for MII write operation to complete */
 	ret = mgbe_mdio_busy_wait(osi_core);
 	if (ret < 0) {
 		OSI_CORE_ERR(osi_core->osd,
-			OSI_LOG_ARG_HW_FAIL,
-			"MII operation timed out\n",
-			0ULL);
+			"MII operation timed out\n");
 	}
 fail:
 	return ret;
@@ -4541,9 +4499,7 @@ static s32 mgbe_read_phy_reg(struct osi_core_priv_data *const osi_core,
 	ret = mgbe_mdio_busy_wait(osi_core);
 	if (ret < 0) {
 		OSI_CORE_ERR(osi_core->osd,
-			OSI_LOG_ARG_HW_FAIL,
-			"MII operation timed out\n",
-			0ULL);
+			"MII operation timed out\n");
 		goto fail;
 	}
 
@@ -4555,7 +4511,7 @@ static s32 mgbe_read_phy_reg(struct osi_core_priv_data *const osi_core,
 	reg |= (phyaddr << MGBE_MDIO_SCCA_PA_SHIFT) |
 		(phyreg & MGBE_MDIO_SCCA_RA_MASK);
 	osi_writela(osi_core, reg, (u8 *)
-		    osi_core->base + MGBE_MDIO_SCCA);
+		    osi_core->mac_base + MGBE_MDIO_SCCA);
 
 	/* Program Data register */
 	reg = (((u32)MGBE_MDIO_SCCD_CMD_RD) << MGBE_MDIO_SCCD_CMD_SHIFT) |
@@ -4569,19 +4525,17 @@ static s32 mgbe_read_phy_reg(struct osi_core_priv_data *const osi_core,
 	}
 
 	osi_writela(osi_core, reg, (u8 *)
-		    osi_core->base + MGBE_MDIO_SCCD);
+		    osi_core->mac_base + MGBE_MDIO_SCCD);
 
 	ret = mgbe_mdio_busy_wait(osi_core);
 	if (ret < 0) {
 		OSI_CORE_ERR(osi_core->osd,
-			OSI_LOG_ARG_HW_FAIL,
-			"MII operation timed out\n",
-			0ULL);
+			"MII operation timed out\n");
 		goto fail;
 	}
 
 	reg = osi_readla(osi_core, (u8 *)
-			 osi_core->base + MGBE_MDIO_SCCD);
+			 osi_core->mac_base + MGBE_MDIO_SCCD);
 
 	data = (reg & MGBE_MDIO_SCCD_SDATA_MASK);
 
@@ -4623,22 +4577,20 @@ static s32 mgbe_write_phy_reg_dt(struct osi_core_priv_data *const osi_core,
 	ret = mgbe_mdio_busy_wait(osi_core);
 	if (ret < 0) {
 		OSI_CORE_ERR(osi_core->osd,
-			OSI_LOG_ARG_HW_FAIL,
 			"MII operation timed out\n",
 			0ULL);
 		goto fail;
 	}
 
 	osi_writela(osi_core, valSCCA, (u8 *)
-				osi_core->base + MGBE_MDIO_SCCA);
+				osi_core->mac_base + MGBE_MDIO_SCCA);
 	osi_writela(osi_core, valSCCD, (u8 *)
-				osi_core->base + MGBE_MDIO_SCCD);
+				osi_core->mac_base + MGBE_MDIO_SCCD);
 
 	/* wait for MII write operation to complete */
 	ret = mgbe_mdio_busy_wait(osi_core);
 	if (ret < 0) {
 		OSI_CORE_ERR(osi_core->osd,
-			OSI_LOG_ARG_HW_FAIL,
 			"MII operation timed out\n",
 			0ULL);
 	}
@@ -4678,19 +4630,18 @@ static s32 mgbe_read_phy_reg_dt(struct osi_core_priv_data *const osi_core,
 	ret = mgbe_mdio_busy_wait(osi_core);
 	if (ret < 0) {
 		OSI_CORE_ERR(osi_core->osd,
-			OSI_LOG_ARG_HW_FAIL,
 			"MII operation timed out\n",
 			0ULL);
 		goto fail;
 	}
 
 	osi_writela(osi_core, valSCCA, (u8 *)
-			osi_core->base + MGBE_MDIO_SCCA);
+			osi_core->mac_base + MGBE_MDIO_SCCA);
 	osi_writela(osi_core, valSCCD, (u8 *)
-			osi_core->base + MGBE_MDIO_SCCD);
+			osi_core->mac_base + MGBE_MDIO_SCCD);
 
 	data = osi_readla(osi_core, (u8 *)
-			osi_core->base + MGBE_MDIO_SCCD);
+			osi_core->mac_base + MGBE_MDIO_SCCD);
 
 	data = (data & MGBE_MDIO_SCCD_SDATA_MASK);
 	ret = (s32)data;
@@ -4718,11 +4669,11 @@ static inline void mgbe_disable_tx_lpi(struct osi_core_priv_data *osi_core)
 
 	/* Disable LPI control bits */
 	lpi_csr = osi_readla(osi_core, (u8 *)
-			     osi_core->base + MGBE_MAC_LPI_CSR);
+			     osi_core->mac_base + MGBE_MAC_LPI_CSR);
 	lpi_csr &= ~(MGBE_MAC_LPI_CSR_LPITE | MGBE_MAC_LPI_CSR_LPITXA |
 		     MGBE_MAC_LPI_CSR_PLS | MGBE_MAC_LPI_CSR_LPIEN);
 	osi_writela(osi_core, lpi_csr, (u8 *)
-		    osi_core->base + MGBE_MAC_LPI_CSR);
+		    osi_core->mac_base + MGBE_MAC_LPI_CSR);
 }
 
 /**
@@ -4753,17 +4704,17 @@ static void mgbe_configure_eee(struct osi_core_priv_data *const osi_core,
 	u32 lpi_timer_ctrl = 0;
 	u32 lpi_entry_timer = 0;
 	u32 tic_counter = 0;
-	void *addr =  osi_core->base;
+	void *addr =  osi_core->mac_base;
 
-	if (osi_core->uphy_gbe_mode == OSI_GBE_MODE_25G) {
-		if (xlgpcs_eee(osi_core, tx_lpi_enabled) != 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-					     "xlgpcs_eee call failed\n", 0ULL);
+	if (osi_core->phy_gbe_mode == OSI_GBE_MODE_25G) {
+		if (xlgpcs_eee(osi_core->pcs_dev, tx_lpi_enabled) != 0) {
+				OSI_CORE_ERR(osi_core->osd, 
+					     "xlgpcs_eee call failed\n");
 				return;
 		}
-	} else if (xpcs_eee(osi_core, tx_lpi_enabled) != 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "xpcs_eee call failed\n", 0ULL);
+	} else if (xpcs_eee(osi_core->pcs_dev, tx_lpi_enabled) != 0) {
+		OSI_CORE_ERR(osi_core->osd, 
+			     "xpcs_eee call failed\n");
 		return;
 	}
 
@@ -4838,16 +4789,14 @@ static void mgbe_get_hw_features(struct osi_core_priv_data *const osi_core,
 				 struct osi_hw_features *hw_feat)
 {
 	const u32 addmac_addrsel_shift[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_MAC_HFR0_ADDMACADRSEL_SHIFT,
 		MGBE_T26X_MAC_HFR0_ADDMACADRSEL_SHIFT
 	};
 	const u32 addmac_addrsel_mask[OSI_MAX_MAC_IP_TYPES] = {
-		0,
 		MGBE_MAC_HFR0_ADDMACADRSEL_MASK,
 		MGBE_T26X_MAC_HFR0_ADDMACADRSEL_MASK
 	};
-	u8 *base = (u8 *)osi_core->base;
+	u8 *base = (u8 *)osi_core->mac_base;
 	u32 mac = osi_core->mac;
 	u32 mac_hfr0 = 0;
 	u32 mac_hfr1 = 0;
@@ -4860,11 +4809,11 @@ static void mgbe_get_hw_features(struct osi_core_priv_data *const osi_core,
 
 	if (osi_core->pre_sil == OSI_ENABLE) {
 		/* TBD: T264 reset to get mac version for MGBE */
-		osi_writela(osi_core, 0x1U, ((u8 *)osi_core->base + MGBE_DMA_MODE));
+		osi_writela(osi_core, 0x1U, ((u8 *)osi_core->mac_base + MGBE_DMA_MODE));
 		ret = hw_poll_for_swr(osi_core);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "T264 MGBE Reset failed\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+			     "T264 MGBE Reset failed\n");
 			goto done;
 		}
 	}
@@ -5032,6 +4981,7 @@ static void mgbe_get_hw_features(struct osi_core_priv_data *const osi_core,
 	hw_feat->num_tbs_ch = ((mac_hfr3 >> MGBE_MAC_HFR3_TBS_CH_SHIFT) &
 			       MGBE_MAC_HFR3_TBS_CH_MASK);
 done:
+	OSI_CORE_INFO(osi_core->osd, "hfr1-addr_64: 0x%x\n", hw_feat->addr_64);
 	return;
 }
 
@@ -5060,7 +5010,7 @@ static inline s32 mgbe_poll_for_update_ts_complete(
 	while (retry < OSI_POLL_COUNT) {
 		/* Read and Check TSUPDT in MAC_Timestamp_Control register */
 		*mac_tcr = osi_readla(osi_core, (u8 *)
-				      osi_core->base + MGBE_MAC_TCR);
+				      osi_core->mac_base + MGBE_MAC_TCR);
 		if ((*mac_tcr & MGBE_MAC_TCR_TSUPDT) == 0U) {
 			ret = 0;
 			break;
@@ -5096,7 +5046,7 @@ static s32 mgbe_adjust_mactime(struct osi_core_priv_data *const osi_core,
 				   const u32 add_sub,
 				   OSI_UNUSED const u32 one_nsec_accuracy)
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 mac_tcr;
 	u32 value = 0;
 	u64 temp = 0;
@@ -5175,7 +5125,7 @@ fail:
 static u32 mgbe_read_reg(struct osi_core_priv_data *const osi_core,
 			      const s32 reg)
 {
-	return osi_readla(osi_core, (u8 *)osi_core->base + reg);
+	return osi_readla(osi_core, (u8 *)osi_core->mac_base + reg);
 }
 
 /**
@@ -5196,7 +5146,7 @@ static u32 mgbe_write_reg(struct osi_core_priv_data *const osi_core,
 			       const u32 val,
 			       const s32 reg)
 {
-	osi_writela(osi_core, val, (u8 *)osi_core->base + reg);
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + reg);
 	return 0;
 }
 
@@ -5294,39 +5244,39 @@ static void mgbe_config_for_macsec(struct osi_core_priv_data *const osi_core,
 		 * IPG (12 B[default] + 32 B[sectag]) = 352 bits
 		 * IPG (12 B[default] + 32 B[sectag] + 15B[if encryption is supported]) = 472 bits
 		 */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				   MGBE_MAC_TMCR);
 		value &= ~MGBE_MAC_TMCR_IPG_MASK;
 		value |= MGBE_MAC_TMCR_IFP;
 		if (osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
 			value |= MGBE_MAC_TMCR_IPG;
 		}
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			    MGBE_MAC_TMCR);
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				   MGBE_MAC_EXT_CNF);
 		value |= MGBE_MAC_EXT_CNF_EIPG;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			    MGBE_MAC_EXT_CNF);
 	} else {
 		/* Update MAC IPG to default value 12B */
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				   MGBE_MAC_TMCR);
 		value &= ~MGBE_MAC_TMCR_IPG_MASK;
 		value &= ~MGBE_MAC_TMCR_IFP;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			    MGBE_MAC_TMCR);
-		value = osi_readla(osi_core, (u8 *)osi_core->base +
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				   MGBE_MAC_EXT_CNF);
 		value &= ~MGBE_MAC_EXT_CNF_EIPG_MASK;
-		osi_writela(osi_core, value, (u8 *)osi_core->base +
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 			    MGBE_MAC_EXT_CNF);
 	}
 	/* start MAC Tx */
 	mgbe_config_mac_tx(osi_core, OSI_ENABLE);
 
 	/* Configure EST */
-	value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MTL_EST_CONTROL);
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MTL_EST_CONTROL);
 	value &= ~MGBE_MTL_EST_CONTROL_CTOV;
 	if (enable == OSI_ENABLE) {
 		temp = MGBE_MTL_EST_CTOV_MACSEC_RECOMMEND;
@@ -5337,7 +5287,7 @@ static void mgbe_config_for_macsec(struct osi_core_priv_data *const osi_core,
 		temp = temp << MGBE_MTL_EST_CONTROL_CTOV_SHIFT;
 		value |= temp & MGBE_MTL_EST_CONTROL_CTOV;
 	}
-	osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_MTL_EST_CONTROL);
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_MTL_EST_CONTROL);
 	return;
 }
 #endif /*  MACSEC_SUPPORT */
@@ -5352,25 +5302,25 @@ static s32 mgbe_config_coe_buf(struct osi_core_priv_data *const osi_core,
 	if (osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
 		/* TODO: Need to enable VLAN tag stripping as SPH feature needs untagged frame only */
 		/* Configure MAC_Ext_Cfg1 register for SPH offsets */
-		val = osi_readl((u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MGBE_MAC_EXT_CFG1);
 		val |= MGBE_MAC_EXT_CFG1_SAVE;
 		val |= (MGBE_MAC_EXT_CFG1_COE_SAVO << MGBE_MAC_EXT_CFG1_COE_SAVO_SHIFT);
 		val |= MGBE_MAC_EXT_CFG1_COE_SPLM;
 		val |= MGBE_MAC_EXT_CFG1_COE_SPLOFST;
-		osi_writel(val, (u8 *)osi_core->base +
+		osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 				MGBE_MAC_EXT_CFG1);
 		/* Configure MTL_Rx_SPKT_CTRL register for COE header offset */
-		val = osi_readl((u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MGBE_MTL_RX_SPKT_CTRL);
 		val |= MGBE_MTL_RX_SPKT_CTRL_COE_HDROS;
-		osi_writel(val, (u8 *)osi_core->base +
+		osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 				MGBE_MTL_RX_SPKT_CTRL);
 		/* Configure the MGBE wrapper for pktinfo cntr */
-		val = osi_readl((u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MGBE_WRAP_COE_PKTINFO_CNTR_INTR_MASK_0);
 		val = OSI_BIT(mgbe_coe.pdma);
-		osi_writel(val, (u8 *)osi_core->base +
+		osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 				MGBE_WRAP_COE_PKTINFO_CNTR_INTR_MASK_0);
 		/* configure the Rx Frame buffers */
 		for (i = 0;i < OSI_MGBE_COE_NUM_RX_FRAMES; i++) {

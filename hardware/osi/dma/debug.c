@@ -39,7 +39,7 @@ static void dump_struct(struct osi_dma_priv_data *osi_dma,
 	unsigned long temp;
 
 	if (ptr == OSI_NULL) {
-		osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS,
+		osi_dma->osd_ops.dbg(
 					"Pointer is NULL\n");
 		return;
 	}
@@ -48,14 +48,14 @@ static void dump_struct(struct osi_dma_priv_data *osi_dma,
 	temp = size - rem;
 
 	for (i = 0; i < temp; i += 4) {
-		osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS,
+		osi_dma->osd_ops.dbg(
 					"%02x%02x%02x%02x", ptr[i], ptr[i + 1],
 					ptr[i + 2], ptr[i + 3]);
 		j = i;
 	}
 
 	for (i = j; i < size; i++) {
-		osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS, "%x",
+		osi_dma->osd_ops.dbg( "%x",
 					ptr[i]);
 	}
 }
@@ -70,13 +70,13 @@ void structs_dump(struct osi_dma_priv_data *osi_dma)
 	struct dma_local *l_dma = (struct dma_local *)((void *)osi_dma);
 	u32 i = 0;
 
-	osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS,
+	osi_dma->osd_ops.dbg(
 				"OSI DMA struct size: %lu",
 				sizeof(struct osi_dma_priv_data));
 	dump_struct(osi_dma, (unsigned char *)osi_dma,
 		    sizeof(struct osi_dma_priv_data));
 
-	osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS,
+	osi_dma->osd_ops.dbg(
 				"OSI DMA Tx/Rx Ring struct sizes: %lu %lu",
 				sizeof(struct osi_tx_ring),
 				sizeof(struct osi_rx_ring));
@@ -88,19 +88,19 @@ void structs_dump(struct osi_dma_priv_data *osi_dma)
 	}
 
 
-	osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS,
+	osi_dma->osd_ops.dbg(
 				"OSD DMA ops struct size: %lu",
 				sizeof(struct osd_dma_ops));
 	dump_struct(osi_dma, (unsigned char *)(&osi_dma->osd_ops),
 		    sizeof(struct osd_dma_ops));
 
-	osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS,
+	osi_dma->osd_ops.dbg(
 				"OSI local DMA struct size: %lu",
 				sizeof(struct dma_local));
 	dump_struct(osi_dma, (unsigned char *)l_dma,
 		    sizeof(struct dma_local));
 
-	osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_STRUCTS,
+	osi_dma->osd_ops.dbg(
 				"OSI local ops DMA struct size: %lu",
 				sizeof(struct dma_chan_ops));
 	dump_struct(osi_dma, (unsigned char *)l_dma->ops_p,
@@ -144,7 +144,7 @@ void reg_dump(struct osi_dma_priv_data *osi_dma)
 			break;
 
 		reg_val = osi_dma_readl((u8 *)osi_dma->base + addr);
-		osi_dma->osd_ops.printf(osi_dma, OSI_DEBUG_TYPE_REG,
+		osi_dma->osd_ops.dbg(
 					"%x: %x\n", addr, reg_val);
 		addr += 4;
 	}
@@ -166,12 +166,11 @@ static void rx_desc_dump(struct osi_dma_priv_data *osi_dma, unsigned int idx,
 
 	if ((rx_ring->rx_desc_phy_addr) >
 	    ((OSI_ULLONG_MAX) - (idx * sizeof(struct osi_rx_desc)))) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid rx addr !!!\n", 0ULL);
+		OSI_DMA_ERR(NULL,  "Invalid rx addr !!!\n");
 		goto exit_func;
 	}
 
-	ops->printf(osi_dma, OSI_DEBUG_TYPE_DESC,
+	ops->dbg(
 		    "N [%02d %4p %04d %lx R_D] = %#x:%#x:%#x:%#x\n",
 		    chan, rx_desc, idx,
 		    (rx_ring->rx_desc_phy_addr + (idx * sizeof(struct osi_rx_desc))),
@@ -202,8 +201,7 @@ static void tx_desc_dump(struct osi_dma_priv_data *osi_dma, unsigned int f_idx,
 	unsigned int ctxt = 0, i = 0;
 
 	if (osi_dma->tx_ring_sz == 0U) {
-		ops->printf(osi_dma, OSI_DEBUG_TYPE_DESC,
-			    "In Valid tx_ring_sz\n");
+		ops->dbg("In Valid tx_ring_sz\n");
 		goto exit_func;
 	}
 	if (f_idx == l_idx) {
@@ -212,12 +210,10 @@ static void tx_desc_dump(struct osi_dma_priv_data *osi_dma, unsigned int f_idx,
 
 			if ((tx_ring->tx_desc_phy_addr) >
 			    ((OSI_ULLONG_MAX) - (f_idx * sizeof(struct osi_tx_desc)))) {
-				OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-					    "Invalid addr !!!\n", 0ULL);
+				OSI_DMA_ERR(NULL, "Invalid addr !!!\n");
 				goto exit_func;
 			}
-		ops->printf(osi_dma, OSI_DEBUG_TYPE_DESC,
-			    "%s [%02d %4p %04d %lx %s] = %#x:%#x:%#x:%#x\n",
+		ops->dbg("%s [%02d %4p %04d %lx %s] = %#x:%#x:%#x:%#x\n",
 			    (ctxt  == TDES3_CTXT) ? "C" : "N",
 			    chan, tx_desc, f_idx,
 			    (tx_ring->tx_desc_phy_addr + (f_idx * sizeof(struct osi_tx_desc))),
@@ -230,8 +226,7 @@ static void tx_desc_dump(struct osi_dma_priv_data *osi_dma, unsigned int f_idx,
 		if (f_idx > l_idx) {
 			if ((l_idx > (UINT_MAX - osi_dma->tx_ring_sz)) ||
 			    ((l_idx + osi_dma->tx_ring_sz) < f_idx)) {
-				OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-					    "Invalid idx !!!\n", 0ULL);
+				OSI_DMA_ERR(NULL, "Invalid idx !!!\n");
 				goto exit_func;
 			}
 			cnt = (int)(l_idx + osi_dma->tx_ring_sz - f_idx);
@@ -245,12 +240,10 @@ static void tx_desc_dump(struct osi_dma_priv_data *osi_dma, unsigned int f_idx,
 
 			if ((tx_ring->tx_desc_phy_addr) >
 			    ((OSI_ULLONG_MAX) - (i * sizeof(struct osi_tx_desc)))) {
-				OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-					    "Invalid addr !!!\n", 0ULL);
+				OSI_DMA_ERR(osi_dma->osd, "Invalid addr !!!\n");
 				break;
 			}
-			ops->printf(osi_dma, OSI_DEBUG_TYPE_DESC,
-				    "%s [%02d %4p %04d %lx %s] = %#x:%#x:%#x:%#x\n",
+			ops->dbg("%s [%02d %4p %04d %lx %s] = %#x:%#x:%#x:%#x\n",
 				    (ctxt  == TDES3_CTXT) ? "C" : "N",
 				    chan, tx_desc, i,
 				    (tx_ring->tx_desc_phy_addr + (i * sizeof(struct osi_tx_desc))),
@@ -281,8 +274,8 @@ void desc_dump(struct osi_dma_priv_data *osi_dma, unsigned int f_idx,
 {
 
 	if ((osi_dma->tx_ring_sz == 0U) || (osi_dma->rx_ring_sz == 0U)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid Tx/Rx ring size\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd,
+			    "Invalid Tx/Rx ring size\n");
 		goto exit_func;
 	}
 
@@ -295,8 +288,8 @@ void desc_dump(struct osi_dma_priv_data *osi_dma, unsigned int f_idx,
 		rx_desc_dump(osi_dma, f_idx, chan);
 		break;
 	default:
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid desc dump flag\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd,
+			    "Invalid desc dump flag\n");
 		break;
 	}
 

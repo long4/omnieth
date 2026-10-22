@@ -24,6 +24,7 @@
 #ifndef INCLUDED_OSI_CORE_H
 #define INCLUDED_OSI_CORE_H
 
+#include <uapi/linux/if.h>
 #include "oeth_export.h"
 #include "oeth_l3l4.h"
 #include <osi_common.h>
@@ -83,7 +84,7 @@ struct ivc_msg_common;
  * @{
  */
 #define OSI_RSS_HASH_KEY_SIZE	40U
-#define OSI_RSS_MAX_TABLE_SIZE	128U
+#define OSI_RSS_MAX_TABLE_SIZE	512U
 /** @} */
 
 #define OSI_CMD_RESET_MMC		12U
@@ -234,9 +235,7 @@ struct ivc_msg_common;
  * @brief EQOS generic helper MACROS.
  * @{
  */
-#define EQOS_MAX_MAC_ADDRESS_FILTER	128U
-#define EQOS_MAX_MAC_5_3_ADDRESS_FILTER	32U
-#define EQOS_MAX_L3_L4_FILTER		8U
+
 #define OSI_MGBE_MAX_MAC_ADDRESS_FILTER	32U
 #define OSI_MGBE_MAX_MAC_ADDRESS_FILTER_T26X	48U
 #define OSI_DA_MATCH			0U
@@ -311,18 +310,37 @@ struct ivc_msg_common;
 /**
  * @brief Ethernet PHY Interface Modes
  */
-#define OSI_XFI_MODE_10G	0U
-#define OSI_XFI_MODE_5G		1U
-#define OSI_USXGMII_MODE_10G	2U
-#define OSI_USXGMII_MODE_5G	3U
+#define OSI_RGMII_MODE_100M		0U		//external phy
+
+#define OSI_SGMII_MODE_1G		0U		//xpcs
+#define OSI_KX_MODE_1G			1U		//xpcs
+#define OSI_RGMII_MODE_1G		2U		// external phy
+
+#define OSI_USXGMII_MODE_2_5G		0U
+#define OSI_USXGMII_MODE_5G		0U
+
+#define OSI_USXGMII_MODE_10G	        0U		//xlgpcs
+#define OSI_SFI_MODE_10G		1U		//xpcs as bellow
+#define OSI_KR_MODE_10G			2U
+#define OSI_CR_MODE_10G			3U
+#define OSI_SR_MODE_10G			4U
+#define OSI_LR_MODE_10G			5U
+
+#define OSI_AUI_MODE_25G		0U		//xlgpcs all
+#define OSI_KR_MODE_25G			1U
+#define OSI_CR_MODE_25G			2U
+#define OSI_SR_MODE_25G			3U
+#define OSI_LR_MODE_25G			4U
+
 /**
  * @brief Ethernet UPHY GBE Modes
  */
-#define OSI_GBE_MODE_5G		0U
-#define OSI_GBE_MODE_10G	1U
-#define OSI_GBE_MODE_25G	2U
-#define OSI_GBE_MODE_1G		3U
-#define OSI_GBE_MODE_2_5G	4U
+#define OSI_GBE_MODE_100M	0U
+#define OSI_GBE_MODE_1G		1U
+#define OSI_GBE_MODE_2_5G	2U
+#define OSI_GBE_MODE_5G		3U
+#define OSI_GBE_MODE_10G	4U
+#define OSI_GBE_MODE_25G	5U
 
 /**
  * @addtogroup IOCTL OPS MACROS
@@ -513,36 +531,39 @@ struct ivc_msg_common;
 #define OSI_CMD_GMSL_COE_CONFIG		59U
 /** @} */
 
-#ifdef LOG_OSI
 /**
  * @brief OSI error macro definition,
  * @param[in] priv: OSD private data OR NULL
  * @param[in] type: error type
- * @param[in] err:  error string
- * @param[in] loga: error additional information
+ * @param[in] fmt:  format string
+ * @param[in] ...:  variable arguments
  */
-#define OSI_CORE_ERR(priv, type, err, loga)			\
+#define OSI_CORE_ERR(priv, fmt, ...)			\
 {								\
-	osi_core->osd_ops.ops_log(priv, __func__, __LINE__,	\
-				  OSI_LOG_ERR, type, err, loga);\
+	osi_core->osd_ops.log(priv, __func__, __LINE__,	\
+				  OSI_LOG_ERR, fmt, ##__VA_ARGS__);\
 }
 
-/**
- * @brief OSI info macro definition
- * @param[in] priv: OSD private data OR NULL
- * @param[in] type: error type
- * @param[in] err:  error string
- * @param[in] loga: error additional information
- */
-#define OSI_CORE_INFO(priv, type, err, loga)				\
+#ifdef INFO_OSI
+#define OSI_CORE_INFO(priv, fmt, ...)				\
 {									\
-	osi_core->osd_ops.ops_log(priv, __func__, __LINE__,		\
-				  OSI_LOG_INFO, type, err, loga);	\
+	osi_core->osd_ops.log(priv, __func__, __LINE__,		\
+				  OSI_LOG_INFO, fmt, ##__VA_ARGS__);	\
+}
+
+#else
+#define OSI_CORE_INFO(fmt, ...)
+#endif
+
+#ifdef DBG_OSI
+#define OSI_CORE_DEBUG(fmt, ...)				\
+{									\
+	osi_core->osd_ops.dbg(fmt, ##__VA_ARGS__);	\
 }
 #else
-#define OSI_CORE_ERR(priv, type, err, loga)
-#define OSI_CORE_INFO(priv, type, err, loga)
+#define OSI_CORE_DEBUG(fmt, ...)
 #endif
+
 
 #define VLAN_NUM_VID		4096U
 #define OSI_DELAY_1000US	1000U
@@ -742,10 +763,6 @@ struct ivc_msg_common;
 /** @brief MAC common interrupt status error code */
 #define OSI_MAC_CMN_INTR_ERR		0x14U
 
-/** @brief EQOS uncorrectable attribute */
-#define OSI_EQOS_UNCORRECTABLE_ATTR	0x109
-/** @brief EQOS correctable attribute */
-#define OSI_EQOS_CORRECTABLE_ATTR	0x309
 /** @brief MGBE0 uncorrectable attribute */
 #define OSI_MGBE0_UNCORRECTABLE_ATTR	0x119
 /** @brief MGBE0 correctable attribute */
@@ -764,6 +781,28 @@ struct ivc_msg_common;
 #define OSI_MGBE3_CORRECTABLE_ATTR	0x31C
 /** @} */
 #endif
+
+/**
+ * @brief Size of Ethernet IRQ name.
+ */
+#define MAC_IRQ_NAME_SZ		32
+
+typedef enum{
+	MAC_IRQ_LPI = 0,
+	MAC_IRQ_SBD,
+	MAC_IRQ_RE,
+	MAC_IRQ_UE,
+	MAC_IRQ_XPCS_SBD,
+	MAC_IRQ_XPCS_UE,
+	MAC_IRQ_XPCS_CE,
+	MAC_IRQ_XLGPCS_SBD,
+	MAC_IRQ_XLGPCS_UE,
+	MAC_IRQ_XLGPCS_CE,
+	MAC_IRQ_MACSEC,
+	MAC_IRQ_MACSEC_AES,
+	MAC_IRQ_MACSEC_ALARM,
+	MAC_IRQ_MAX,
+} mac_irq_t;
 
 /**
  * @addtogroup RX EQ related information
@@ -1186,19 +1225,6 @@ struct osi_pto_config {
 };
 
 /**
- * @brief osi_core_rss - Struture used to store RSS Hash key and table
- * information.
- */
-struct osi_core_rss {
-	/** Flag to represent to enable RSS or not */
-	u32 enable;
-	/** Array for storing RSS Hash key */
-	u8 key[OSI_RSS_HASH_KEY_SIZE];
-	/** Array for storing RSS Hash table */
-	u32 table[OSI_RSS_MAX_TABLE_SIZE];
-};
-
-/**
  * @brief Max num of MAC core registers to backup. It should be max of or >=
  * (EQOS_MAX_BAK_IDX=380, coreX,...etc) backup registers.
  */
@@ -1310,9 +1336,8 @@ struct osd_core_ops {
 	/** padctrl rx pin disable/enable callback */
 	s32 (*padctrl_mii_rx_pins)(void *priv, u32 enable);
 	/** logging callback */
-	void (*ops_log)(void *priv, const char *func, u32 line,
-			u32 level, u32 type, const char *err,
-			u64 loga);
+	void (*log)(void *priv, const char *func, u32 line,
+			u32 level, const char *fmt, ...);
 	/** udelay callback for sleep < 7usec as this is busy wait in most OSes */
 	void (*udelay)(u64 usec);
 	/** usleep callback for longer sleep duration */
@@ -1339,12 +1364,8 @@ struct osd_core_ops {
 		void (*macsec_pn_event)(void *priv, u32 sa_idx, u32 sc_idx,
 					u32 event, u32 ctlr);
 #endif /* MACSEC_SUPPORT */
-#ifdef OSI_DEBUG
 	/**.printf function callback */
-	void (*printf)(struct osi_core_priv_data *osi_core,
-		       u32 type,
-		       const char *fmt, ...);
-#endif
+	void (*dbg)(const char *fmt, ...);
 	/** Lane bringup restart callback */
 	void (*restart_lane_bringup)(void *priv, u32 en_disable);
 };
@@ -1372,10 +1393,6 @@ struct osi_macsec_sc_info {
 	/** Secure association key
 	 * valid values are from 0 to 0xFF for each array element */
 	u8 sak[OSI_KEY_LEN_256];
-#ifdef MACSEC_KEY_PROGRAM
-	/** Secure association key */
-	u8 hkey[OSI_KEY_LEN_128];
-#endif /* MACSEC_KEY_PROGRAM */
 	/** current AN
 	 * valid values are from 0 to OETHRM_PIF$OSI_MAX_NUM_SA-1 */
 	u8 curr_an;
@@ -1414,7 +1431,7 @@ struct osi_macsec_sc_info {
 	/** Peer MACID is stored
 	 * valid values are from 0 to UINT8_MAX */
 	u8 peer_macid[OSI_ETH_ALEN];
-	/** XPN Extended Packet Numbering â€” required by DWC IP in hardware.
+	/** XPN Extended Packet Numbering ¡ª required by DWC IP in hardware.
 	 * Both CONFIG_MACSEC kernel offload and MACSEC_KEY_PROGRAM private
 	 * genl paths program SALT/SSCI/SAD XPN fields.
 	 */
@@ -1428,12 +1445,8 @@ struct osi_macsec_sc_info {
 	u8 salt[12];
 	/** XPN mode: OSI_ENABLE (1) or OSI_DISABLE (0) */
 	u32 xpn;
-#ifdef CONFIG_MACSEC
-	/** SAK key length (16 for AES-128, 32 for AES-256) */
-	u32 key_len;
 	/** Frame validation mode */
 	u32 validate_frames;
-#endif /* CONFIG_MACSEC */
 };
 
 /**
@@ -1630,8 +1643,6 @@ struct osi_ioctl {
 		struct osi_pto_config pto_config;
 		/** RXQ route structure */
 		struct osi_rxq_route rxq_route;
-		/** RSS core structure */
-		struct osi_core_rss rss;
 #endif /* !OSI_STRIPPED_LIB */
 		/** FRP structure */
 		struct osi_core_frp_cmd frp_cmd;
@@ -1647,6 +1658,7 @@ struct osi_ioctl {
 		struct osi_core_ptp_tsc_data ptp_tsc;
         /** COE config data */
         struct osi_mgbe_coe mgbe_coe;
+		struct osi_irq_data irq_data;
 	}data;
 };
 
@@ -1745,18 +1757,21 @@ struct osi_hsi_data {
  * @brief The OSI Core (MAC & MTL) private data structure.
  */
 struct osi_core_priv_data {
+	struct device *dev;
 	/** Memory mapped base address of MAC IP
 	 * non NULL pointer*/
-	void *base;
+	void *mac_base;
+	void *xlgpcs_base;
+	void *xpcs_base;
+	void *macsec_base;
+	void *ethcsr_base;
+
 	/** Memory mapped base address of DMA window of MAC IP
 	 * non NULL pointer*/
 	void *dma_base;
 	/** Memory mapped base address of XPCS IP
 	 * non NULL pointer*/
-	void *xpcs_base;
-	/** Memory mapped base address of MACsec IP
-	 * non NULL pointer*/
-	void *macsec_base;
+	struct pcs_device * pcs_dev;
 #ifdef MACSEC_SUPPORT
 	/** Memory mapped base address of MACsec TZ page
 	 * non NULL pointer*/
@@ -1905,12 +1920,13 @@ struct osi_core_priv_data {
 	/** MC packets Multiple DMA channel selection flags */
 	u32 mc_dmasel;
 	/** UPHY GBE mode (2 for 25F, 1 for 10G, 0 for 5G) */
-	u32 uphy_gbe_mode;
+	u32 phy_gbe_mode;
 	/** number of PDMA's */
 	u32 num_of_pdma;
 	/** Array of PDMA to VDMA mapping */
 	struct osi_pdma_vdma_data pdma_data[OSI_MGBE_MAX_NUM_PDMA_CHANS];
 	/** Number of channels enabled in MAC */
+	u32 max_chans;
 	u32 num_dma_chans;
 	/** Array of supported DMA channels */
 	u32 dma_chans[OSI_MGBE_MAX_NUM_CHANS];
@@ -1919,6 +1935,7 @@ struct osi_core_priv_data {
 	/** number of VM IRQ's
 	 * Fixed value filled by NvEthernet unit as 4*/
 	u32 num_vm_irqs;
+	u32 num_irqs;
 	/** PHY interface mode (0/1 for XFI 10/5G, 2/3 for USXGMII 10/5)
 	 * (4 for XFI 25G) (5 for USXGMII 25G */
 	u32 phy_iface_mode;
@@ -1926,6 +1943,7 @@ struct osi_core_priv_data {
 	 * valid values are from 0 to 4
 	 * 0 to 3 fo reach MGBE instance and 4 for EQOS */
 	u32 instance_id;
+	char if_name[IFNAMSIZ];
 	/** Ethernet controller MAC to MAC Time sync role
 	 * valid values are OETHRM_PIF$OSI_PTP_M2M_INACTIVE,
 	 * OETHRM_PIF$OSI_PTP_M2M_PRIMARY and
@@ -1969,7 +1987,7 @@ struct osi_core_priv_data {
  * @pre
  * - MAC should be out of reset. See osi_poll_for_mac_reset_complete()
  *   for details.
- * - osi_core->base needs to be filled based on ioremap.
+ * - osi_core->mac_base needs to be filled based on ioremap.
  * - osi_core->num_mtl_queues needs to be filled.
  * - osi_core->mtl_queues[qinx] need to be filled.
  *
@@ -2289,6 +2307,10 @@ s32 osi_init_core_ops(struct osi_core_priv_data *const osi_core);
 #endif
 s32 osi_handle_ioctl(struct osi_core_priv_data *osi_core,
 			 struct osi_ioctl *data);
+s32 osi_handle_get_rss(struct osi_core_priv_data *osi_core,
+				    uint8_t * const hkey, uint32_t * const indir, bool * const enable);
+s32 osi_handle_set_rss(struct osi_core_priv_data *osi_core,
+				    const uint8_t * hkey, const uint32_t * indir, const bool enable);
 
 /**
  * @brief
@@ -2328,7 +2350,9 @@ s32 osi_handle_ioctl(struct osi_core_priv_data *osi_core,
  *  - forward
  */
 #endif
+
 struct osi_core_priv_data *osi_get_core(void);
+char * osi_get_irq_name(int irq_idx);
 
 #ifdef PHY_PROG
 /**
@@ -2460,48 +2484,6 @@ s32 osi_read_phy_reg_dt(struct osi_core_priv_data *const osi_core,
 s32 osi_release_core(struct osi_core_priv_data *osi_core);
 #endif
 
-/**
- * @brief
- * Description: Initialiation of EQoS XPCS IP.
- *
- * @param[in] osi_core: A pointer to the osi_core_priv_data structure
- *   * Range: A non-null pointer to OETHRM_PIF$osi_core_priv_data structure.
- *     * Refer OETHRM_PIF$osi_core_priv_data
- *
- * @usage
- * - Allowed context for the API call
- *  - Interrupt handler: No
- *  - Signal handler: No
- *  - Thread safe: No
- *  - Async/Sync: Sync
- * - Required Privileges: None
- * - API Group:
- *  - Initialization: Yes
- *  - Run time: No
- *  - De-initialization: No
- *
- * @return
- * 0 on success
- * -1 on failure
- *
- */
-s32 eqos_xpcs_init(struct osi_core_priv_data *osi_core);
-
-#ifndef OSI_STRIPPED_LIB
-/**
- * @brief xpcs_eee - XPCS enable/disable EEE
- *
- * Algorithm: This routine update register related to EEE
- * for XPCS.
- *
- * @param[in] osi_core: OSI core data structure.
- * @param[in] en_dis: enable - 1 or disable - 0
- *
- * @retval 0 on success
- * @retval -1 on failure.
- */
-s32 xpcs_eee(struct osi_core_priv_data *osi_core, u32 en_dis);
-#endif
 
 /**
  * @brief mixed_bank_reg_prog - programs the mixed bank registers in non-Tegra chips

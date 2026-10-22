@@ -88,8 +88,8 @@ static s32 poll_for_dbg_buf_update(struct osi_core_priv_data *const osi_core)
 	count = 0;
 	while (cond == COND_NOT_MET) {
 		if (count > retry) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				      "timeout!\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				      "timeout!\n");
 			ret = -1;
 			goto err;
 		}
@@ -540,8 +540,8 @@ static s32 validate_inputs_macsec_dbg_buf_conf(
 	/* Validate inputs */
 	if ((dbg_buf_config->rw > OSI_RW_MAX) ||
 		(dbg_buf_config->ctlr_sel > OSI_CTLR_SEL_MAX)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Params validation failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Params validation failed\n");
 		ret = -1;
 		goto err;
 	}
@@ -550,8 +550,8 @@ static s32 validate_inputs_macsec_dbg_buf_conf(
 		(dbg_buf_config->index > OSI_TX_DBG_BUF_IDX_MAX)) ||
 		((dbg_buf_config->ctlr_sel == OSI_CTLR_SEL_RX) &&
 		(dbg_buf_config->index > OSI_RX_DBG_BUF_IDX_MAX))) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Wrong index \n", dbg_buf_config->index);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Wrong index: %llu\n", dbg_buf_config->index);
 		ret = -1;
 		goto err;
 	}
@@ -672,8 +672,8 @@ static s32 macsec_dbg_events_config(
 	/* Validate inputs */
 	if ((dbg_buf_config->rw > OSI_RW_MAX) ||
 		(dbg_buf_config->ctlr_sel > OSI_CTLR_SEL_MAX)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Params validation failed!\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Params validation failed!\n");
 		ret = -1;
 		goto err;
 	}
@@ -686,8 +686,8 @@ static s32 macsec_dbg_events_config(
 			}
 		}
 		if (events > 1U) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Don't allow more than one debug events set\n", flags);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Don't allow more than one debug events set: %u\n", flags);
 			ret = -1;
 			goto err;
 		}
@@ -701,8 +701,8 @@ static s32 macsec_dbg_events_config(
 		rx_dbg_trigger_evts(osi_core, dbg_buf_config);
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Unknown controller select\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Unknown controller select\n");
 		break;
 	}
 err:
@@ -906,8 +906,8 @@ static s32 macsec_enable(struct osi_core_priv_data *const osi_core,
 	 * Both EQOS and MGBE of T264 cannot have macsec and fpe enabled simultaneously */
 	if ((osi_core->mac_ver != OSI_EQOS_MAC_5_30) &&
 	    (enable == OSI_ENABLE) && (osi_core->is_fpe_enabled == OSI_ENABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "MACSE and FPE cannot coexist\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "MACSE and FPE cannot coexist\n");
 		ret = -1;
 		goto exit;
 	}
@@ -958,9 +958,7 @@ static inline s32 poll_for_kt_update(struct osi_core_priv_data *osi_core)
 	while (cond == 1) {
 		if (count > retry) {
 			OSI_CORE_ERR(osi_core->osd,
-				OSI_LOG_ARG_HW_FAIL,
-				"KT update timed out\n",
-				0ULL);
+				"KT update timed out\n");
 			return -1;
 		}
 
@@ -1175,9 +1173,7 @@ static inline s32 poll_for_lut_update(struct osi_core_priv_data *osi_core)
 	while (cond == 1) {
 		if (count > retry) {
 			OSI_CORE_ERR(osi_core->osd,
-				OSI_LOG_ARG_HW_FAIL,
-				"LUT update timed out\n",
-				0ULL);
+				"LUT update timed out\n");
 			ret = -1;
 			goto exit;
 		}
@@ -1551,8 +1547,8 @@ static s32 byp_lut_read(struct osi_core_priv_data *const osi_core,
 
 	read_lut_data(osi_core, lut_data);
 	if (lut_read_inputs(lut_config, lut_data) != 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "LUT inputs error\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "LUT inputs error\n");
 		ret = -1;
 		goto err;
 	}
@@ -1581,8 +1577,8 @@ static s32 byp_lut_read(struct osi_core_priv_data *const osi_core,
 		paddr = addr + rx_byp_lut_reg[osi_core->macsec];
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Unknown controller select\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Unknown controller select\n");
 		ret = -1;
 		break;
 	}
@@ -1735,8 +1731,8 @@ static s32 sci_lut_read(struct osi_core_priv_data *const osi_core,
 	switch (lut_config->table_config.ctlr_sel) {
 	case OSI_CTLR_SEL_TX:
 		if (lut_read_inputs(lut_config, lut_data) != 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "LUT inputs error\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "LUT inputs error\n");
 			ret = -1;
 			goto exit;
 		}
@@ -1768,8 +1764,8 @@ static s32 sci_lut_read(struct osi_core_priv_data *const osi_core,
 		}
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Unknown controller selected\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Unknown controller selected\n");
 		ret = -1;
 		break;
 	}
@@ -1871,8 +1867,8 @@ static s32 sc_param_lut_read(struct osi_core_priv_data *const osi_core,
 		}
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Unknown controller selected\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Unknown controller selected\n");
 		ret = -1;
 		break;
 	}
@@ -2010,8 +2006,8 @@ static s32 coe_lut_read(struct osi_core_priv_data *const osi_core,
 						    COE_LUT_BYTE_PATTERN_MASK);
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid controller selected for COE LUT\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid controller selected for COE LUT\n");
 		ret = -1;
 		break;
 	}
@@ -2070,8 +2066,8 @@ static s32 lut_data_read(struct osi_core_priv_data *const osi_core,
 		ret = coe_lut_read(osi_core, lut_config);
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Unsupported LUT\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Unsupported LUT\n");
 		ret = -1;
 		break;
 	}
@@ -2416,16 +2412,16 @@ static s32 sc_param_lut_config(struct osi_core_priv_data *const osi_core,
 	};
 
 	if (entry.key_index_start > key_idx_max[osi_core->macsec]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid Key Index\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid Key Index\n");
 		ret = -1;
 		goto exit;
 	}
 	/* Confidentionality offset is de-PoRed from T264, hence conf_offset cannot be non-zero */
 	if ((entry.encrypt > 1U) || (entry.conf_offset > 0U) ||
 		(entry.vlan_in_clear > 1U)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid paramters\n", entry.conf_offset);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid paramters: %u\n", entry.conf_offset);
 		ret = -1;
 		goto exit;
 	}
@@ -3052,8 +3048,8 @@ static s32 sci_lut_config(struct osi_core_priv_data *const osi_core,
 
 	if ((entry.sc_index > sc_lut_max_index[macsec]) ||
 		(lut_config->table_config.index > sc_lut_max_index[macsec])) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "SCI LUT config err - Invalid Index\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "SCI LUT config err - Invalid Index\n");
 		ret = -1;
 		goto exit;
 	}
@@ -3063,8 +3059,8 @@ static s32 sci_lut_config(struct osi_core_priv_data *const osi_core,
 
 	if (table_config.ctlr_sel == OSI_CTLR_SEL_TX) {
 		if (tx_sci_lut_config(osi_core, lut_config, lut_data) < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to config tx sci LUT\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to config tx sci LUT\n");
 			ret = -1;
 			goto exit;
 		}
@@ -3154,8 +3150,8 @@ static s32 byp_lut_config(struct osi_core_priv_data *const osi_core,
 	};
 
 	if (lut_config_inputs(lut_config, lut_data) != 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "LUT inputs error\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "LUT inputs error\n");
 		ret = -1;
 		goto exit;
 	}
@@ -3215,8 +3211,8 @@ static s32 byp_lut_config(struct osi_core_priv_data *const osi_core,
 
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Unknown controller select\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Unknown controller select\n");
 		ret = -1;
 		break;
 	}
@@ -3272,8 +3268,8 @@ static inline s32 lut_data_write(struct osi_core_priv_data *const osi_core,
 		ret = coe_lut_config(osi_core, lut_config);
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Unsupported LUT\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Unsupported LUT\n");
 		ret = -1;
 		break;
 	}
@@ -3539,8 +3535,8 @@ static inline void handle_safety_err_irq(
 				const struct osi_core_priv_data *const osi_core)
 {
 	(void) osi_core;
-	OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_INVALID),
-		      ("Safety Error Handler\n"), (0ULL));
+	OSI_CORE_INFO((osi_core->osd),
+		      ("Safety Error Handler\n"));
 	MACSEC_LOG("%s()\n", __func__);
 }
 
@@ -4359,8 +4355,8 @@ static s32 clear_byp_lut(struct osi_core_priv_data *const osi_core)
 			table_config->index = j;
 			ret = macsec_lut_config(osi_core, &lut_config);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Error clearing CTLR:BYPASS LUT:INDEX: \n", j);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Error clearing CTLR:BYPASS LUT:INDEX: %u\n", j);
 				goto exit;
 			}
 		}
@@ -4411,8 +4407,8 @@ static s32 clear_sci_lut(struct osi_core_priv_data *const osi_core)
 			table_config->index = j;
 			ret = macsec_lut_config(osi_core, &lut_config);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Error clearing CTLR:SCI LUT:INDEX: \n", j);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Error clearing CTLR:SCI LUT:INDEX: %u\n", j);
 				goto exit;
 			}
 		}
@@ -4463,8 +4459,8 @@ static s32 clear_sc_param_lut(struct osi_core_priv_data *const osi_core)
 			table_config->index = j;
 			ret = macsec_lut_config(osi_core, &lut_config);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Error clearing CTLR:SC PARAM LUT:INDEX: \n", j);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Error clearing CTLR:SC PARAM LUT:INDEX: %u\n", j);
 				goto exit;
 			}
 		}
@@ -4516,8 +4512,8 @@ static s32 clear_sc_state_lut(struct osi_core_priv_data *const osi_core)
 			table_config->index = j;
 			ret = macsec_lut_config(osi_core, &lut_config);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Error clearing CTLR:SC STATE LUT:INDEX: \n", j);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Error clearing CTLR:SC STATE LUT:INDEX: %u\n", j);
 				goto exit;
 			}
 		}
@@ -4569,8 +4565,8 @@ static s32 clear_sa_state_lut(struct osi_core_priv_data *const osi_core)
 		table_config->index = j;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Error clearing TX CTLR:SA STATE LUT:INDEX: \n", j);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Error clearing TX CTLR:SA STATE LUT:INDEX: %u\n", j);
 			goto exit;
 		}
 	}
@@ -4582,8 +4578,8 @@ static s32 clear_sa_state_lut(struct osi_core_priv_data *const osi_core)
 		table_config->index = j;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Error clearing RX CTLR:SA STATE LUT:INDEX: \n", j);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Error clearing RX CTLR:SA STATE LUT:INDEX: %u\n", j);
 			goto exit;
 		}
 	}
@@ -4667,8 +4663,8 @@ static s32 clear_lut(struct osi_core_priv_data *const osi_core)
 			table_config->index = j;
 			ret = macsec_kt_config(osi_core, &kt_config);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "Error clearing KT LUT:INDEX: \n", j);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "Error clearing KT LUT:INDEX: %u\n", j);
 				goto exit;
 			}
 		}
@@ -4827,8 +4823,8 @@ static s32 macsec_update_mtu(struct osi_core_priv_data *const osi_core,
 	s32 ret = 0;
 
 	if (mtu > OSI_MAX_MTU_SIZE) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid MTU received!!\n", mtu);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid MTU: %u received!!\n", mtu);
 		ret = -1;
 		goto exit;
 	}
@@ -4897,8 +4893,8 @@ static s32 upd_byp_rx_lut_with_vf_mac(struct osi_core_priv_data *const osi_core,
 			osi_core->macsec_lut_status[OSI_CTLR_SEL_RX].next_byp_idx;
 	ret = macsec_lut_config(osi_core, &lut_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Failed to set Rx BYP for MACSEC VF MAC\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Failed to set Rx BYP for MACSEC VF MAC: %d\n", ret);
 		goto exit;
 	} else {
 		INC_BYP_LUT_IDX(osi_core->macsec_lut_status[OSI_CTLR_SEL_RX].next_byp_idx);
@@ -4910,8 +4906,8 @@ static s32 upd_byp_rx_lut_with_vf_mac(struct osi_core_priv_data *const osi_core,
 	lut_config.flags |= OSI_LUT_FLAGS_VLAN_VALID;
 	ret = macsec_lut_config(osi_core, &lut_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Failed to set Rx BYP for MACSEC VF MAC\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Failed to set Rx BYP for MACSEC VF MAC: %d\n", ret);
 		goto exit;
 	} else {
 		INC_BYP_LUT_IDX(osi_core->macsec_lut_status[OSI_CTLR_SEL_RX].next_byp_idx);
@@ -4970,8 +4966,8 @@ static s32 set_byp_lut_for_mkpdu(struct osi_core_priv_data *const osi_core)
 				osi_core->macsec_lut_status[i].next_byp_idx;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			   "Failed to set BYP for MKPDU multicast DA\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+			   "Failed to set BYP for MKPDU multicast DA: %d\n", ret);
 
 			goto exit;
 		} else {
@@ -4984,8 +4980,8 @@ static s32 set_byp_lut_for_mkpdu(struct osi_core_priv_data *const osi_core)
 				osi_core->macsec_lut_status[i].next_byp_idx;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			   "Failed to set BYP for MKPDU multicast DA\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+			   "Failed to set BYP for MKPDU multicast DA: %d\n", ret);
 
 			goto exit;
 		} else {
@@ -5033,8 +5029,8 @@ static s32 set_byp_lut(struct osi_core_priv_data *const osi_core)
 	/* Invalidate LUT entries */
 	ret = clear_lut(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Invalidating all LUT's failed\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Invalidating all LUT's failed: %d\n", ret);
 		goto exit;
 	}
 	/* Set default BYP for BC packets */
@@ -5052,8 +5048,8 @@ static s32 set_byp_lut(struct osi_core_priv_data *const osi_core)
 				osi_core->macsec_lut_status[i].next_byp_idx;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				      "Failed to set BYP for BC addr\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+				      "Failed to set BYP for BC addr: %d\n", ret);
 			goto exit;
 		} else {
 			INC_BYP_LUT_IDX(osi_core->macsec_lut_status[i].next_byp_idx);
@@ -5064,8 +5060,8 @@ static s32 set_byp_lut(struct osi_core_priv_data *const osi_core)
 				osi_core->macsec_lut_status[i].next_byp_idx;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				      "Failed to set BYP for BC addr\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+				      "Failed to set BYP for BC addr: %d\n", ret);
 			goto exit;
 		} else {
 			INC_BYP_LUT_IDX(osi_core->macsec_lut_status[i].next_byp_idx);
@@ -5184,8 +5180,8 @@ static s32 macsec_initialize(struct osi_core_priv_data *const osi_core, u32 mtu,
 	// For T264 MACSec MAC speed of 10 amd 100 are not supported
 	if((osi_core->macsec == OSI_MACSEC_T26X) &&
 	   ((osi_core->speed == OSI_SPEED_10) || (osi_core->speed == OSI_SPEED_100))) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "cannot enable T264 MACSec in present MAC speed\n", (u64)osi_core->speed);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "cannot enable T264 MACSec in present MAC speed: %u\n", osi_core->speed);
 		ret = -1;
 		goto exit;
 	}
@@ -5298,15 +5294,15 @@ static s32 macsec_initialize(struct osi_core_priv_data *const osi_core, u32 mtu,
 
 	ret = set_byp_lut(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Setting default BYP LUT failed\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Setting default BYP LUT failed: %d\n", ret);
 		goto exit;
 	}
 
 	ret = macsec_enable(osi_core, OSI_ENABLE);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "MACSEC enable failed\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "MACSEC enable failed: %d\n", ret);
 		goto exit;
 	}
 
@@ -5317,15 +5313,15 @@ upd_byp_sci_lut:
 	ret = upd_byp_rx_lut_with_vf_mac(osi_core, macsec_vf_mac);
 
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Setting default BYP LUT failed\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Setting default BYP LUT failed: %d\n", ret);
 		goto exit;
 	}
 #ifdef DUMMY_SC
 	ret = add_dummy_sc(osi_core, macsec_vf_mac);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Setting dummy SC LUT failed\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Setting dummy SC LUT failed: %d\n", ret);
 		goto exit;
 	}
 #endif
@@ -5459,8 +5455,8 @@ static s32 macsec_get_key_index(struct osi_core_priv_data *const osi_core,
 	(void)osi_macsec_memcpy(sc.sci, sci, OSI_SCI_LEN);
 	sc_info = find_existing_sc(osi_core, &sc, ctlr);
 	if (sc_info == OSI_NULL) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "SCI Not found\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "SCI Not found: %d\n", ret);
 		ret = -1;
 		goto exit;
 	}
@@ -5578,8 +5574,8 @@ static s32 del_upd_sc(struct osi_core_priv_data *const osi_core,
 
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to del SCI LUT idx\n",
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to del SCI LUT idx: %d\n",
 				     sc->sc_idx_start);
 			ret = -1;
 			goto exit;
@@ -5588,8 +5584,8 @@ static s32 del_upd_sc(struct osi_core_priv_data *const osi_core,
 		table_config->index = GET_SCI_LUT_VLAN_IDX(existing_sc->sc_idx_start);
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to del SCI LUT idx\n",
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to del SCI LUT idx: %d\n",
 				     sc->sc_idx_start);
 			ret = -1;
 			goto exit;
@@ -5599,8 +5595,8 @@ static s32 del_upd_sc(struct osi_core_priv_data *const osi_core,
 		lut_config.lut_sel = OSI_LUT_SEL_SC_PARAM;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to del SC param\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to del SC param: %d\n", ret);
 			ret = -1;
 			goto exit;
 		}
@@ -5609,8 +5605,8 @@ static s32 del_upd_sc(struct osi_core_priv_data *const osi_core,
 		lut_config.lut_sel = OSI_LUT_SEL_SC_STATE;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to del SC state\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to del SC state: %d\n", ret);
 			ret = -1;
 			goto exit;
 		}
@@ -5622,8 +5618,8 @@ static s32 del_upd_sc(struct osi_core_priv_data *const osi_core,
 			       sc->curr_an) & (0xFFU));
 	ret = macsec_lut_config(osi_core, &lut_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to del SA state\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to del SA state: %d\n", ret);
 		ret = -1;
 		goto exit;
 	}
@@ -5640,8 +5636,8 @@ static s32 del_upd_sc(struct osi_core_priv_data *const osi_core,
 	table_config->index = *kt_idx;
 	ret = macsec_kt_config(osi_core, &kt_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to del SAK\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to del SAK: %d\n", ret);
 		ret = -1;
 		goto exit;
 	}
@@ -5677,8 +5673,8 @@ static void print_error(const struct osi_core_priv_data *const osi_core,
 {
 	(void) osi_core;
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to config macsec\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to config macsec: %d\n", ret);
 	}
 }
 
@@ -5838,8 +5834,8 @@ static s32 add_upd_sc(struct osi_core_priv_data *const osi_core,
 
 		ret = macsec_kt_config(osi_core, &kt_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to set SAK\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to set SAK: %d\n", ret);
 			ret = -1;
 			goto exit;
 		}
@@ -5859,8 +5855,8 @@ static s32 add_upd_sc(struct osi_core_priv_data *const osi_core,
 	lut_config.flags |= OSI_LUT_FLAGS_ENTRY_VALID;
 	ret = macsec_lut_config(osi_core, &lut_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to set SA state\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to set SA state: %d\n", ret);
 		error_mask |= CLEAR_KEY_LUT;
 		goto exit;
 	}
@@ -5884,8 +5880,8 @@ static s32 add_upd_sc(struct osi_core_priv_data *const osi_core,
 	}
 	ret = macsec_lut_config(osi_core, &lut_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to set SC param\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to set SC param: %d\n", ret);
 		error_mask |= CLEAR_SA_STATE_LUT;
 		error_mask |= CLEAR_KEY_LUT;
 		goto exit;
@@ -5913,8 +5909,8 @@ static s32 add_upd_sc(struct osi_core_priv_data *const osi_core,
 	lut_config.flags |= OSI_LUT_FLAGS_ENTRY_VALID;
 	ret = macsec_lut_config(osi_core, &lut_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to set SCI LUT\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to set SCI LUT: %d\n", ret);
 		error_mask |= CLEAR_SC_PARAM_LUT;
 		error_mask |= CLEAR_SA_STATE_LUT;
 		error_mask |= CLEAR_KEY_LUT;
@@ -5925,8 +5921,8 @@ static s32 add_upd_sc(struct osi_core_priv_data *const osi_core,
 	lut_config.flags |= OSI_LUT_FLAGS_VLAN_VALID;
 	ret = macsec_lut_config(osi_core, &lut_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to set SCI LUT\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to set SCI LUT: %d\n", ret);
 		error_mask |= CLEAR_SCI_LUT;
 		error_mask |= CLEAR_SC_PARAM_LUT;
 		error_mask |= CLEAR_SA_STATE_LUT;
@@ -5942,8 +5938,8 @@ static s32 add_upd_sc(struct osi_core_priv_data *const osi_core,
 		lut_config.sc_state_out.curr_an = sc->curr_an;
 		ret = macsec_lut_config(osi_core, &lut_config);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Failed to set SC state\n", (u64)ret);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Failed to set SC state: %d\n", ret);
 			error_mask |= CLEAR_SCI_LUT_FOR_VLAN;
 			error_mask |= CLEAR_SCI_LUT;
 			error_mask |= CLEAR_SC_PARAM_LUT;
@@ -6051,16 +6047,16 @@ static s32 add_new_sc(struct osi_core_priv_data *const osi_core,
 	lut_status_ptr = &osi_core->macsec_lut_status[ctlr];
 
 	if (lut_status_ptr->num_of_sc_used >= max_num_sc[osi_core->macsec]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-		  "Err: Reached max SC LUT entries!\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+		  "Err: Reached max SC LUT entries!\n");
 		ret = -1;
 		goto exit;
 	}
 
 	avail_sc_idx = get_avail_sc_idx(osi_core, ctlr);
 	if (avail_sc_idx == max_num_sc[osi_core->macsec]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Err: NO free SC Index\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Err: NO free SC Index\n");
 		ret = -1;
 		goto exit;
 	}
@@ -6088,8 +6084,8 @@ static s32 add_new_sc(struct osi_core_priv_data *const osi_core,
 
 	if (add_upd_sc(osi_core, new_sc, ctlr, kt_idx) !=
 		       OSI_NONE_SIGNED) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "failed to add new SC\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "failed to add new SC\n");
 		ret = -1;
 		goto exit;
 	} else {
@@ -6151,8 +6147,8 @@ static s32 macsec_configure(struct osi_core_priv_data *const osi_core,
 #ifdef DUMMY_SC
 	ret = delete_dummy_sc(osi_core, sc);
 	if (ret < OSI_NONE_SIGNED) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Delete dummy SC failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Delete dummy SC failed\n");
 		ret = -1;
 		goto exit;
 	}
@@ -6162,9 +6158,8 @@ static s32 macsec_configure(struct osi_core_priv_data *const osi_core,
 	existing_sc = find_existing_sc(osi_core, sc, ctlr);
 	if (existing_sc == OSI_NULL) {
 		if (enable == OSI_DISABLE) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "trying to delete non-existing SC ?\n",
-				     0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "trying to delete non-existing SC ?\n");
 			ret = -1;
 			goto exit;
 		} else {
@@ -6182,8 +6177,8 @@ static s32 macsec_configure(struct osi_core_priv_data *const osi_core,
 			MACSEC_LOG("%s: Deleting existing SA", __func__);
 			if (del_upd_sc(osi_core, existing_sc, sc, ctlr, kt_idx) !=
 			    OSI_NONE_SIGNED) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "failed to del SA\n", 0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "failed to del SA\n");
 				ret = -1;
 				goto exit;
 			} else {
@@ -6220,8 +6215,8 @@ static s32 macsec_configure(struct osi_core_priv_data *const osi_core,
 
 			if (add_upd_sc(osi_core, tmp_sc_p, ctlr, kt_idx) !=
 				       OSI_NONE_SIGNED) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "failed to add new SA\n", 0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "failed to add new SA\n");
 				ret = -1;
 				goto exit;
 			} else {
@@ -6301,8 +6296,8 @@ static s32 delete_dummy_sc(struct osi_core_priv_data *const osi_core,
 						 zero_mac, (OSI_ETH_ALEN & 0xFFU));
 				break;
 			} else {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-						"Deletion of dummy SC failed\n", 0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+						"Deletion of dummy SC failed\n");
 				ret = -1;
 				goto exit_func;
 			}
@@ -6360,8 +6355,8 @@ static s32 add_dummy_sc(struct osi_core_priv_data *const osi_core, u8 *const mac
 
 	ret = add_new_sc(osi_core, &sc, OSI_CTLR_SEL_TX, &kt_idx, OSI_MACSEC_SC_DUMMY);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			      "Failed to program dummy sc\n", (u64)ret);
+		OSI_CORE_ERR(osi_core->osd, 
+			      "Failed to program dummy sc: %d\n", ret);
 		goto exit_func;
 	}
 	for (i = 0U; i < max_num_sc[osi_core->macsec]; i++) {
@@ -6415,8 +6410,8 @@ static void hsi_nvmacsec_error_inject(struct osi_core_priv_data *const osi_core,
 			    common_isr_set[osi_core->macsec]);
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid error code\n", (u32)error_code);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid error code: %u\n", error_code);
 		break;
 	}
 	return;

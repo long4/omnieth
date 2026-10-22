@@ -24,11 +24,12 @@
 #ifndef INCLUDED_CORE_LOCAL_H
 #define INCLUDED_CORE_LOCAL_H
 
+#include "common.h"
 #include <osi_core.h>
+
 #ifdef MACSEC_SUPPORT
 #include <osi_macsec.h>
 #endif /* MACSEC_SUPPORT */
-#include "common.h"
 
 /**
  * @brief Maximum number of OSI core instances.
@@ -137,7 +138,7 @@ struct core_ops {
 	/** Called to initialize MAC and MTL registers */
 	s32 (*core_init)(struct osi_core_priv_data *const osi_core);
 	/** Called to handle common interrupt */
-	void (*handle_common_intr)(struct osi_core_priv_data *const osi_core);
+	void (*handle_common_intr)(struct osi_core_priv_data *const osi_core, u32 irq_id);
 	/** Called to do pad caliberation */
 	s32 (*pad_calibrate)(struct osi_core_priv_data *const osi_core);
 	/** Called to update MAC address 1-127 */
@@ -238,9 +239,9 @@ struct core_ops {
 				struct osi_core_priv_data *const osi_core,
 				const u32 lb_mode);
 	/** Called to configure RSS for MAC */
-	s32 (*config_rss)(struct osi_core_priv_data *osi_core, const struct osi_core_rss *rss);
+	s32 (*config_rss)(struct osi_core_priv_data *osi_core, const uint8_t * hkey, const uint32_t * indir, const bool enable);
 	/** Called to get RSS parameters from MAC */
-	s32 (*get_rss)(struct osi_core_priv_data *osi_core, struct osi_core_rss *rss);
+	s32 (*get_rss)(struct osi_core_priv_data *osi_core, uint8_t * const hkey, uint32_t * const indir, bool * const enable);
 	/** Called to configure the PTP RX packets Queue */
 	s32 (*config_ptp_rxq)(struct osi_core_priv_data *const osi_core,
 				  const u32 rxq_idx,
@@ -375,7 +376,7 @@ struct dynamic_cfg {
 	/** L2 filter storage */
 	struct osi_filter l2_filter;
 	/** L2 filter configuration */
-	struct core_l2 l2[EQOS_MAX_MAC_ADDRESS_FILTER];
+	struct core_l2 l2[OSI_MGBE_MAX_MAC_ADDRESS_FILTER];
 #ifdef HSI_SUPPORT
 	/** HSI state */
 	u32 hsi_en_dis;
@@ -664,7 +665,7 @@ static inline s32 osi_readl_poll_timeout(void *addr, struct osi_core_priv_data *
 	u32 val;
 
 	while (elapsed_delay < total_delay) {
-		val = osi_readl((u8 *)addr);
+		val = osi_readla(osi_core, (u8 *)addr);
 		if ((val & lmask) == rmask) {
 			ret = 0;
 			break;

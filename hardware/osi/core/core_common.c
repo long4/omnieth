@@ -23,8 +23,7 @@
 #include "common.h"
 #include "core_common.h"
 #include "mgbe_core.h"
-#include "eqos_core.h"
-#include "xpcs.h"
+#include "pcs.h"
 #include "osi_macsec.h"
 
 s32 poll_check(struct osi_core_priv_data *const osi_core, u8 *addr,
@@ -39,8 +38,8 @@ s32 poll_check(struct osi_core_priv_data *const osi_core, u8 *addr,
 	count = 0;
 	while (cond == COND_NOT_MET) {
 		if (count > retry) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "poll_check: timeout\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "poll_check: timeout\n");
 			ret = -1;
 			goto fail;
 		}
@@ -62,11 +61,10 @@ s32 hw_poll_for_swr(struct osi_core_priv_data *const osi_core)
 {
 	u32 dma_mode_val = 0U;
 	const u32 dma_mode[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_BMR,
 		MGBE_DMA_MODE,
 		MGBE_DMA_MODE
 	};
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 
 	return poll_check(osi_core, ((u8 *)addr + dma_mode[osi_core->mac]),
 			  DMA_MODE_SWR, &dma_mode_val);
@@ -74,25 +72,21 @@ s32 hw_poll_for_swr(struct osi_core_priv_data *const osi_core)
 
 void hw_start_mac(struct osi_core_priv_data *const osi_core)
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 value;
 	const u32 mac_mcr_te_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_MCR,
 		MGBE_MAC_TMCR,
 		MGBE_MAC_TMCR
 	};
 	const u32 mac_mcr_re_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_MCR,
 		MGBE_MAC_RMCR,
 		MGBE_MAC_RMCR
 	};
 	const u32 set_bit_te[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MCR_TE,
 		MGBE_MAC_TMCR_TE,
 		MGBE_MAC_TMCR_TE
 	};
 	const u32 set_bit_re[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MCR_RE,
 		MGBE_MAC_RMCR_RE,
 		MGBE_MAC_RMCR_RE
 	};
@@ -108,25 +102,21 @@ void hw_start_mac(struct osi_core_priv_data *const osi_core)
 
 void hw_stop_mac(struct osi_core_priv_data *const osi_core)
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 value;
 	const u32 mac_mcr_te_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_MCR,
 		MGBE_MAC_TMCR,
 		MGBE_MAC_TMCR
 	};
 	const u32 mac_mcr_re_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_MCR,
 		MGBE_MAC_RMCR,
 		MGBE_MAC_RMCR
 	};
 	const u32 clear_bit_te[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MCR_TE,
 		MGBE_MAC_TMCR_TE,
 		MGBE_MAC_TMCR_TE
 	};
 	const u32 clear_bit_re[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MCR_RE,
 		MGBE_MAC_RMCR_RE,
 		MGBE_MAC_RMCR_RE
 	};
@@ -142,29 +132,18 @@ void hw_stop_mac(struct osi_core_priv_data *const osi_core)
 
 s32 hw_set_mode(struct osi_core_priv_data *const osi_core, const s32 mode)
 {
-	void *base = osi_core->base;
-	u32 mcr_val;
 	s32 ret = 0;
-	const u32 bit_set[2] = { EQOS_MCR_DO, EQOS_MCR_DM };
-	const u32 clear_bit[2] = { EQOS_MCR_DM, EQOS_MCR_DO };
 
 #ifndef OSI_STRIPPED_LIB
 	/* don't allow only if mode is other than 0 or 1 */
 	if ((mode != OSI_FULL_DUPLEX) && (mode != OSI_HALF_DUPLEX)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"Invalid duplex mode\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"Invalid duplex mode\n");
 		ret = -1;
 		goto fail;
 	}
 #endif /* !OSI_STRIPPED_LIB */
 
-	if ((osi_core->mac == OSI_MAC_HW_EQOS) &&
-	    ((mode == OSI_FULL_DUPLEX) || (mode == OSI_HALF_DUPLEX))) {
-		mcr_val = osi_readla(osi_core, (u8 *)base + EQOS_MAC_MCR);
-		mcr_val |= bit_set[mode];
-		mcr_val &= ~clear_bit[mode];
-		osi_writela(osi_core, mcr_val, ((u8 *)base + EQOS_MAC_MCR));
-	}
 #ifndef OSI_STRIPPED_LIB
 fail:
 #endif /* !OSI_STRIPPED_LIB */
@@ -179,8 +158,8 @@ static s32 xpcs_init_start(struct osi_core_priv_data *const osi_core)
 
 	if (osi_core->mac == OSI_MAC_HW_MGBE) {
 		if (osi_core->xpcs_base == OSI_NULL) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "XPCS base is NULL", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "XPCS base is NULL");
 			ret = -1;
 			goto fail;
 		}
@@ -195,10 +174,10 @@ static s32 xpcs_init_start(struct osi_core_priv_data *const osi_core)
 			goto fail;
 		}
 
-		value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_IER);
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 		/* Enable Link Status interrupt only after lane bring up success */
 		value |= MGBE_IMR_RGSMIIIE;
-		osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_MAC_IER);
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 	}
 fail:
 	return ret;
@@ -210,30 +189,27 @@ s32 hw_set_speed(struct osi_core_priv_data *const osi_core, const s32 speed)
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	u32  value;
 	s32  ret = 0;
-	void *base = osi_core->base;
+	void *base = osi_core->mac_base;
 	const u32 mac_mcr[OSI_MAX_MAC_IP_TYPES] = {
-				EQOS_MAC_MCR,
 				MGBE_MAC_TMCR,
 				MGBE_MAC_TMCR
 			};
 
 	l_core->lane_status = OSI_DISABLE;
-
-	if (((osi_core->mac == OSI_MAC_HW_EQOS) && (speed > OSI_SPEED_2500)) ||
-	    (((osi_core->mac == OSI_MAC_HW_MGBE) ||
-	    (osi_core->mac == OSI_MAC_HW_MGBE_T26X)) &&
-	    ((speed < OSI_SPEED_2500) && (speed > OSI_SPEED_25000)))) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "unsupported speed\n", (u64)speed);
+	OSI_CORE_INFO(osi_core->osd, "hw_set_speed start... speed=%lld\n", speed);
+	if ((osi_core->mac == OSI_MAC_HW_MGBE) &&
+	    ((speed < OSI_SPEED_100) && (speed > OSI_SPEED_25000))) {
+		OSI_CORE_ERR(osi_core->osd, 
+			     "unsupported speed: %lld\n", (u64)speed);
 		ret = -1;
 		goto fail;
 	}
 #ifdef MACSEC_SUPPORT
 	if ((osi_core->macsec_initialized == OSI_ENABLE) &&
 	    ((speed == OSI_SPEED_10) || (speed == OSI_SPEED_100)) &&
-	    ((osi_core->mac_ver == OSI_EQOS_MAC_5_40) || (osi_core->mac_ver == OSI_MGBE_MAC_4_20))) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "unsupported speed when T264 MACSec is enabled\n", (u64)speed);
+	    (osi_core->mac_ver == OSI_MGBE_MAC_4_20)) {
+		OSI_CORE_ERR(osi_core->osd, 
+			     "unsupported speed when T264 MACSec is enabled: %lld\n", (u64)speed);
 		ret = -1;
 		goto fail;
 	}
@@ -241,36 +217,22 @@ s32 hw_set_speed(struct osi_core_priv_data *const osi_core, const s32 speed)
 	value = osi_readla(osi_core, ((u8 *)base + mac_mcr[osi_core->mac]));
 	switch (speed) {
 #ifndef OSI_STRIPPED_LIB
-	case OSI_SPEED_10:
-		value |= EQOS_MCR_PS;
-		value &= ~EQOS_MCR_FES;
-		break;
-	case OSI_SPEED_100:
-		value |= EQOS_MCR_PS;
-		value |= EQOS_MCR_FES;
-		break;
 	case OSI_SPEED_2500:
-		if (osi_core->mac == OSI_MAC_HW_EQOS) {
-			value &= ~EQOS_MCR_PS;
-			value |= EQOS_MCR_FES;
-		} else {
-			value |= MGBE_MAC_TMCR_SS_2_5G;
-		}
+		value |= MGBE_MAC_TMCR_SS_2_5GX; //ss=3'b110
 		break;
 #endif /* !OSI_STRIPPED_LIB */
 	case OSI_SPEED_1000:
-		value &= ~EQOS_MCR_PS;
-		value &= ~EQOS_MCR_FES;
+		value |= MGBE_MAC_TMCR_SS_1G; //ss=3'b011
 		break;
 	case OSI_SPEED_5000:
-		value |= MGBE_MAC_TMCR_SS_5G;
+		value |= MGBE_MAC_TMCR_SS_5G;  //ss=3'b101
 		break;
 	case OSI_SPEED_10000:
-		value &= ~MGBE_MAC_TMCR_SS_10G;
+		value &= ~MGBE_MAC_TMCR_SS_10G; //ss=3'b000
 		break;
 	case OSI_SPEED_25000:
-		value &= ~MGBE_MAC_TMCR_SS_10G;
-		value |= MGBE_MAC_TMCR_SS_SPEED_25G;
+		value &= ~MGBE_MAC_TMCR_SS_10G; 
+		value |= MGBE_MAC_TMCR_SS_25G; //ss=3'b001
 		break;
 	default:
 		ret = -1;
@@ -278,39 +240,32 @@ s32 hw_set_speed(struct osi_core_priv_data *const osi_core, const s32 speed)
 	}
 
 	if (ret != -1) {
-		osi_writela(osi_core, value, ((u8 *)osi_core->base + mac_mcr[osi_core->mac]));
-		if (osi_core->mac != OSI_MAC_HW_EQOS) {
-			if (speed == OSI_SPEED_25000) {
-				ret = xlgpcs_init(osi_core);
-				if (ret < 0) {
-					goto fail;
-				}
-
-				ret = xlgpcs_start(osi_core);
-				if (ret < 0) {
-					goto fail;
-				}
-			} else {
-				ret = xpcs_init(osi_core);
-				if (ret < 0) {
-					goto fail;
-				}
-
-				ret = xpcs_start(osi_core);
-				if (ret < 0) {
-					goto fail;
-				}
+		osi_writela(osi_core, value, ((u8 *)osi_core->mac_base + mac_mcr[osi_core->mac]));
+		if (speed == OSI_SPEED_25000) {
+			ret = xlgpcs_init(osi_core);
+			if (ret < 0) {
+				goto fail;
 			}
-			value = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_IER);
-			/* Enable Link Status interrupt only after lane bring up success */
-			value |= MGBE_IMR_RGSMIIIE;
-			osi_writela(osi_core, value, (u8 *)osi_core->base + MGBE_MAC_IER);
-		} else if (osi_core->mac_ver == OSI_EQOS_MAC_5_40) {
-			ret = eqos_xpcs_init(osi_core);
+
+			ret = xlgpcs_start(osi_core->pcs_dev);
+			if (ret < 0) {
+				goto fail;
+			}
+		} else {
+			ret = xpcs_init(osi_core);
+			if (ret < 0) {
+				goto fail;
+			}
+
+			ret = xpcs_start(osi_core->pcs_dev);
 			if (ret < 0) {
 				goto fail;
 			}
 		}
+		value = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
+		/* Enable Link Status interrupt only after lane bring up success */
+		value |= MGBE_IMR_RGSMIIIE;
+		osi_writela(osi_core, value, (u8 *)osi_core->mac_base + MGBE_MAC_IER);
 	}
 
 	l_core->lane_status = OSI_ENABLE;
@@ -323,12 +278,11 @@ fail:
 s32 hw_flush_mtl_tx_queue(struct osi_core_priv_data *const osi_core,
 			      const u32 q_inx)
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 tx_op_mode_val = 0U;
 	u32 que_idx = (q_inx & 0xFU);
 	u32 value;
 	const u32 tx_op_mode[OSI_MAX_MAC_IP_TYPES] = {
-		 EQOS_MTL_CHX_TX_OP_MODE(que_idx),
 		 MGBE_MTL_CHX_TX_OP_MODE(que_idx),
 		 MGBE_MTL_CHX_TX_OP_MODE(que_idx)
 	};
@@ -350,13 +304,11 @@ s32 hw_config_fw_err_pkts(struct osi_core_priv_data *osi_core,
 	s32 ret = 0;
 	u32 que_idx = (q_inx & 0xFU);
 	const u32 rx_op_mode[OSI_MAX_MAC_IP_TYPES] = {
-		 EQOS_MTL_CHX_RX_OP_MODE(que_idx),
 		 MGBE_MTL_CHX_RX_OP_MODE(que_idx),
 		 MGBE_MTL_CHX_RX_OP_MODE(que_idx)
 	};
 #ifndef OSI_STRIPPED_LIB
 	const u32 max_q[OSI_MAX_MAC_IP_TYPES] = {
-		OSI_EQOS_MAX_NUM_QUEUES,
 		OSI_MGBE_MAX_NUM_QUEUES,
 		OSI_MGBE_MAX_NUM_QUEUES
 	};
@@ -369,7 +321,7 @@ s32 hw_config_fw_err_pkts(struct osi_core_priv_data *osi_core,
 	}
 
 	/* Read MTL RXQ Operation_Mode Register */
-	val = osi_readla(osi_core, ((u8 *)osi_core->base +
+	val = osi_readla(osi_core, ((u8 *)osi_core->mac_base +
 			 rx_op_mode[osi_core->mac]));
 
 	/* enable_fw_err_pkts, 1 is for enable and 0 is for disable */
@@ -389,7 +341,7 @@ s32 hw_config_fw_err_pkts(struct osi_core_priv_data *osi_core,
 	/* Write to FEP bit of MTL RXQ Operation Mode Register to enable or
 	 * disable the forwarding of error packets to DMA or application.
 	 */
-	osi_writela(osi_core, val, ((u8 *)osi_core->base +
+	osi_writela(osi_core, val, ((u8 *)osi_core->mac_base +
 		    rx_op_mode[osi_core->mac]));
 fail:
 	return ret;
@@ -397,13 +349,13 @@ fail:
 	/* using void to skip the misra error of unused variable */
 	(void)enable_fw_err_pkts;
 	/* Read MTL RXQ Operation_Mode Register */
-	val = osi_readla(osi_core, ((u8 *)osi_core->base +
+	val = osi_readla(osi_core, ((u8 *)osi_core->mac_base +
 			 rx_op_mode[osi_core->mac]));
 	val |= MTL_RXQ_OP_MODE_FEP;
 	/* Write to FEP bit of MTL RXQ Operation Mode Register to enable or
 	 * disable the forwarding of error packets to DMA or application.
 	 */
-	osi_writela(osi_core, val, ((u8 *)osi_core->base +
+	osi_writela(osi_core, val, ((u8 *)osi_core->mac_base +
 		    rx_op_mode[osi_core->mac]));
 
 	return ret;
@@ -413,16 +365,14 @@ fail:
 s32 hw_config_rxcsum_offload(struct osi_core_priv_data *const osi_core,
 				u32 enabled)
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 value;
 	s32 ret = 0;
 	const u32 rxcsum_mode[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_MCR,
 		MGBE_MAC_RMCR,
 		MGBE_MAC_RMCR
 	};
 	const u32 ipc_value[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MCR_IPC,
 		MGBE_MAC_RMCR_IPC,
 		MGBE_MAC_RMCR_IPC
 	};
@@ -447,21 +397,18 @@ fail:
 s32 hw_set_systime_to_mac(struct osi_core_priv_data *const osi_core,
 			      const u32 sec, const u32 nsec)
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 mac_tcr = 0U;
 	s32 ret = 0;
 	const u32 mac_tscr[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_TCR,
 		MGBE_MAC_TCR,
 		MGBE_MAC_TCR
 	};
 	const u32 mac_stsur[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_STSUR,
 		MGBE_MAC_STSUR,
 		MGBE_MAC_STSUR
 	};
 	const u32 mac_stnsur[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_STNSUR,
 		MGBE_MAC_STNSUR,
 		MGBE_MAC_STNSUR
 	};
@@ -493,16 +440,14 @@ fail:
 s32 hw_config_addend(struct osi_core_priv_data *const osi_core,
 			 const u32 addend)
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 mac_tcr = 0U;
 	s32 ret = 0;
 	const u32 mac_tscr[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_TCR,
 		MGBE_MAC_TCR,
 		MGBE_MAC_TCR
 	};
 	const u32 mac_tar[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_TAR,
 		MGBE_MAC_TAR,
 		MGBE_MAC_TAR
 	};
@@ -529,31 +474,26 @@ fail:
 void hw_config_pps(struct osi_core_priv_data *const osi_core)
 {
 	const u32 mac_pps_tt_nsec[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_PPS_TT_NSEC,
 		MGBE_MAC_PPS_TT_NSEC,
 		MGBE_MAC_PPS_TT_NSEC
 	};
 	const u32 mac_pps_tt_sec[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_PPS_TT_SEC,
 		MGBE_MAC_PPS_TT_SEC,
 		MGBE_MAC_PPS_TT_SEC
 	};
 	const u32 mac_pps_interval[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_PPS_INTERVAL,
 		MGBE_MAC_PPS_INTERVAL,
 		MGBE_MAC_PPS_INTERVAL
 	};
 	const u32 mac_pps_width[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_PPS_WIDTH,
 		MGBE_MAC_PPS_WIDTH,
 		MGBE_MAC_PPS_WIDTH
 	};
 	const u32 mac_pps[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_PPS_CTL,
 		MGBE_MAC_PPS_CTL,
 		MGBE_MAC_PPS_CTL
 	};
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	u64 temp = 0U;
 	u32 value = 0x0U;
@@ -566,9 +506,6 @@ void hw_config_pps(struct osi_core_priv_data *const osi_core)
 
 
 	if (l_core->pps_freq > OSI_ENABLE) { // PPS_CMD related code
-		if (osi_core->mac_ver == OSI_EQOS_MAC_5_30) {
-			ssinc_val = OSI_PTP_SSINC_6;
-		}
 
 		value = osi_readla(osi_core, (u8 *)addr + mac_pps[osi_core->mac]);
 		value &= ~MAC_PPS_CTL_PPSCTRL0;
@@ -595,12 +532,12 @@ void hw_config_pps(struct osi_core_priv_data *const osi_core)
 		ret = poll_check(osi_core, ((u8 *)addr + mac_pps_tt_nsec[osi_core->mac]),
 				 MAC_PPS_TT_NSEC_TRG_BUSY, &value);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Not able to program PPS trigger time\n", (u64)value);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Not able to program PPS trigger time: %lld\n", (u64)value);
 			goto error;
 		}
 
-		core_get_systime_from_mac(osi_core->base, osi_core->mac, &sec, &nsec);
+		core_get_systime_from_mac(osi_core->mac_base, osi_core->mac, &sec, &nsec);
 
 		if ((OSI_NSEC_PER_SEC_U - 100000000U) > nsec) {
 			nsec += 100000000U; //Trigger PPS train after 100ms
@@ -649,14 +586,13 @@ void hw_config_tscr(struct osi_core_priv_data *const osi_core, const u32 ptp_fil
 void hw_config_tscr(struct osi_core_priv_data *const osi_core, OSI_UNUSED const u32 ptp_filter)
 #endif /* !OSI_STRIPPED_LIB */
 {
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 mac_tcr = 0U;
 #ifndef OSI_STRIPPED_LIB
 	u32 i = 0U, temp = 0U;
 #endif /* !OSI_STRIPPED_LIB */
 
 	const u32 mac_tscr[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_TCR,
 		MGBE_MAC_TCR,
 		MGBE_MAC_TCR
 	};
@@ -729,10 +665,9 @@ void hw_config_tscr(struct osi_core_priv_data *const osi_core, OSI_UNUSED const 
 void hw_config_ssir(struct osi_core_priv_data *const osi_core)
 {
 	u32 val = 0U;
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	const struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	const u32 mac_ssir[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_SSIR,
 		MGBE_MAC_SSIR,
 		MGBE_MAC_SSIR
 	};
@@ -741,9 +676,6 @@ void hw_config_ssir(struct osi_core_priv_data *const osi_core)
 	/* by default Fine method is enabled */
 	val = ptp_ssinc[l_core->l_mac_ver];
 	/* EQOS T234 SSINC is different from EOQS T264, Logic added for EQOS T264 */
-	if (osi_core->mac_ver == OSI_EQOS_MAC_5_40) {
-		val = OSI_PTP_SSINC_4;
-	}
 
 	val |= val << MAC_SSIR_SSINC_SHIFT;
 	/* update Sub-second Increment Value */
@@ -753,24 +685,11 @@ void hw_config_ssir(struct osi_core_priv_data *const osi_core)
 s32 hw_ptp_tsc_capture(struct osi_core_priv_data *const osi_core,
 			   struct osi_core_ptp_tsc_data *data)
 {
-#ifndef OSI_STRIPPED_LIB
-	const struct core_local *l_core = (struct core_local *)osi_core;
-#endif /* !OSI_STRIPPED_LIB */
-	void *addr = osi_core->base;
+	void *addr = osi_core->mac_base;
 	u32 tsc_ptp = 0U;
 	s32 ret = 0;
 
-#ifndef OSI_STRIPPED_LIB
-	/* This code is NA for Orin use case */
-	if (l_core->l_mac_ver < MAC_CORE_VER_TYPE_EQOS_5_30) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "ptp_tsc: older IP\n", 0ULL);
-		ret = -1;
-		goto done;
-	}
-#endif /* !OSI_STRIPPED_LIB */
-
-	osi_writela(osi_core, OSI_ENABLE, (u8 *)osi_core->base + WRAP_SYNC_TSC_PTP_CAPTURE);
+	osi_writela(osi_core, OSI_ENABLE, (u8 *)osi_core->mac_base + WRAP_SYNC_TSC_PTP_CAPTURE);
 
 	ret = poll_check(osi_core, ((u8 *)addr + WRAP_SYNC_TSC_PTP_CAPTURE),
 			 OSI_ENABLE, &tsc_ptp);
@@ -778,13 +697,13 @@ s32 hw_ptp_tsc_capture(struct osi_core_priv_data *const osi_core,
 		goto done;
 	}
 
-	data->tsc_low_bits = osi_readla(osi_core, (u8 *)osi_core->base +
+	data->tsc_low_bits = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					WRAP_TSC_CAPTURE_LOW);
-	data->tsc_high_bits =  osi_readla(osi_core, (u8 *)osi_core->base +
+	data->tsc_high_bits =  osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					  WRAP_TSC_CAPTURE_HIGH);
-	data->ptp_low_bits =  osi_readla(osi_core, (u8 *)osi_core->base +
+	data->ptp_low_bits =  osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					 WRAP_PTP_CAPTURE_LOW);
-	data->ptp_high_bits =  osi_readla(osi_core, (u8 *)osi_core->base +
+	data->ptp_high_bits =  osi_readla(osi_core, (u8 *)osi_core->mac_base +
 					  WRAP_PTP_CAPTURE_HIGH);
 done:
 	return ret;
@@ -797,13 +716,13 @@ static inline void config_l2_da_perfect_inverse_match(
 {
 	u32 value = 0U;
 
-	value = osi_readla(osi_core, ((u8 *)osi_core->base + MAC_PKT_FILTER_REG));
+	value = osi_readla(osi_core, ((u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG));
 	value &= ~MAC_PFR_DAIF;
 	if (perfect_inverse_match == OSI_INV_MATCH) {
 		/* Set DA Inverse Filtering */
 		value |= MAC_PFR_DAIF;
 	}
-	osi_writela(osi_core, value, ((u8 *)osi_core->base + MAC_PKT_FILTER_REG));
+	osi_writela(osi_core, value, ((u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG));
 }
 #endif /* !OSI_STRIPPED_LIB */
 
@@ -813,7 +732,7 @@ s32 hw_config_mac_pkt_filter_reg(struct osi_core_priv_data *const osi_core,
 	u32 value = 0U;
 	s32 ret = 0;
 
-	value = osi_readla(osi_core, ((u8 *)osi_core->base + MAC_PKT_FILTER_REG));
+	value = osi_readla(osi_core, ((u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG));
 
 	if ((filter->oper_mode & OSI_OPER_EN_PERFECT) != OSI_DISABLE) {
 		value |= MAC_PFR_HPF;
@@ -842,7 +761,7 @@ s32 hw_config_mac_pkt_filter_reg(struct osi_core_priv_data *const osi_core,
 #endif /* !OSI_STRIPPED_LIB */
 
 	osi_writela(osi_core, value,
-		    ((u8 *)osi_core->base + MAC_PKT_FILTER_REG));
+		    ((u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG));
 
 #ifndef OSI_STRIPPED_LIB
 	if ((filter->oper_mode & OSI_OPER_EN_L2_DA_INV) != OSI_DISABLE) {
@@ -853,9 +772,9 @@ s32 hw_config_mac_pkt_filter_reg(struct osi_core_priv_data *const osi_core,
 		config_l2_da_perfect_inverse_match(osi_core, OSI_PFT_MATCH);
 	}
 #else
-	value = osi_readla(osi_core, ((u8 *)osi_core->base + MAC_PKT_FILTER_REG));
+	value = osi_readla(osi_core, ((u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG));
 	value &= ~MAC_PFR_DAIF;
-	osi_writela(osi_core, value, ((u8 *)osi_core->base + MAC_PKT_FILTER_REG));
+	osi_writela(osi_core, value, ((u8 *)osi_core->mac_base + MAC_PKT_FILTER_REG));
 
 #endif /* !OSI_STRIPPED_LIB */
 
@@ -867,7 +786,7 @@ void hw_config_l3_l4_filter_enable(struct osi_core_priv_data *const osi_core,
 				   const u32 filter_enb_dis)
 {
 	u32 value = 0U;
-	void *base = osi_core->base;
+	void *base = osi_core->mac_base;
 
 	value = osi_readla(osi_core, ((u8 *)base + MAC_PKT_FILTER_REG));
 	value &= ~(MAC_PFR_IPFE);
@@ -905,12 +824,10 @@ static inline s32 hw_est_read(struct osi_core_priv_data *osi_core,
 	u32 val = 0U;
 	s32 ret;
 	const u32 MTL_EST_GCL_CONTROL[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_GCL_CONTROL,
 		MGBE_MTL_EST_GCL_CONTROL,
 		MGBE_MTL_EST_GCL_CONTROL
 	};
 	const u32 MTL_EST_DATA[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_DATA,
 		MGBE_MTL_EST_DATA,
 		MGBE_MTL_EST_DATA
 	};
@@ -920,12 +837,12 @@ static inline s32 hw_est_read(struct osi_core_priv_data *osi_core,
 	val &= ~MTL_EST_ADDR_MASK;
 	val |= MTL_EST_GCRR;
 	val |= MTL_EST_SRWO | MTL_EST_R1W0 | MTL_EST_DBGM | bunk | addr_val;
-	osi_writela(osi_core, val, (u8 *)osi_core->base +
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 		    MTL_EST_GCL_CONTROL[mac]);
 
 	while (retry > 0U) {
 		retry--;
-		val = osi_readla(osi_core, (u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				 MTL_EST_GCL_CONTROL[mac]);
 		if ((val & MTL_EST_SRWO) == MTL_EST_SRWO) {
 			if (once == 0U) {
@@ -949,7 +866,7 @@ static inline s32 hw_est_read(struct osi_core_priv_data *osi_core,
 		goto err;
 	}
 
-	*data = osi_readla(osi_core, (u8 *)osi_core->base +
+	*data = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			   MTL_EST_DATA[mac]);
 	ret = 0;
 err:
@@ -963,16 +880,16 @@ static s32 validate_est_args(struct osi_core_priv_data *const osi_core,
 	const struct core_local *l_core = (struct core_local *)(void *)osi_core;
 
 	if (est->en_dis > OSI_ENABLE) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "input argument en_dis value\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "input argument en_dis value: %lld\n",
 			     (u64)est->en_dis);
 		ret = -1;
 		goto done;
 	}
 
 	if ((est->llr > l_core->gcl_dep) || (est->llr == OSI_NONE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "input argument more than GCL depth\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "input argument more than GCL depth: %lld\n",
 			     (u64)est->llr);
 		ret = -1;
 		goto done;
@@ -980,8 +897,8 @@ static s32 validate_est_args(struct osi_core_priv_data *const osi_core,
 
 	/* 24 bit configure time in GCL + 7) */
 	if (est->ter > 0x7FFFFFFFU) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid TER value\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid TER value: %lld\n",
 			     (u64)est->ter);
 		ret = -1;
 		goto done;
@@ -991,9 +908,9 @@ static s32 validate_est_args(struct osi_core_priv_data *const osi_core,
 	if ((est->ctr[0] > OSI_NSEC_PER_SEC) ||
 	    (est->btr[0] > OSI_NSEC_PER_SEC) ||
 	    (est->ctr[1] > 0xFFU)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "input argument CTR/BTR nsec is invalid\n",
-			     0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "input argument CTR/BTR nsec is invalid: %lld\n",
+			     (u64)est->ctr[1]);
 		ret = -1;
 		goto done;
 	}
@@ -1001,9 +918,9 @@ static s32 validate_est_args(struct osi_core_priv_data *const osi_core,
 	/* if btr + offset is more than limit */
 	if ((est->btr[0] > (OSI_NSEC_PER_SEC - est->btr_offset[0])) ||
 	    (est->btr[1] > (UINT_MAX - est->btr_offset[1]))) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "input argument BTR offset is invalid\n",
-			     0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "input argument BTR offset is invalid: %lld\n",
+			     (u64)est->btr_offset[1]);
 		ret = -1;
 		goto done;
 	}
@@ -1024,23 +941,17 @@ static s32 validate_btr(struct osi_core_priv_data *const osi_core,
 	u64 btr_new = 0U;
 	u64 old_btr, old_ctr;
 	u32 btr_l, btr_h, ctr_l, ctr_h;
-	const u32 MTL_EST_CONTROL[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_CONTROL,
-							    MGBE_MTL_EST_CONTROL,
+	const u32 MTL_EST_CONTROL[OSI_MAX_MAC_IP_TYPES] = { MGBE_MTL_EST_CONTROL,
 							    MGBE_MTL_EST_CONTROL};
-	const u32 PTP_CYCLE_8[OSI_MAX_MAC_IP_TYPES] = {EQOS_8PTP_CYCLE,
-							MGBE_8PTP_CYCLE,
+	const u32 PTP_CYCLE_8[OSI_MAX_MAC_IP_TYPES] = {	MGBE_8PTP_CYCLE,
 							MGBE_8PTP_CYCLE};
-	const u32 MTL_EST_BTR_LOW[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_BTR_LOW,
-							    MGBE_MTL_EST_BTR_LOW,
+	const u32 MTL_EST_BTR_LOW[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_BTR_LOW,
 							    MGBE_MTL_EST_BTR_LOW};
-	const u32 MTL_EST_BTR_HIGH[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_BTR_HIGH,
-							     MGBE_MTL_EST_BTR_HIGH,
+	const u32 MTL_EST_BTR_HIGH[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_BTR_HIGH,
 							     MGBE_MTL_EST_BTR_HIGH};
-	const u32 MTL_EST_CTR_LOW[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_CTR_LOW,
-							    MGBE_MTL_EST_CTR_LOW,
+	const u32 MTL_EST_CTR_LOW[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_CTR_LOW,
 							    MGBE_MTL_EST_CTR_LOW};
-	const u32 MTL_EST_CTR_HIGH[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_CTR_HIGH,
-							     MGBE_MTL_EST_CTR_HIGH,
+	const u32 MTL_EST_CTR_HIGH[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_CTR_HIGH,
 							     MGBE_MTL_EST_CTR_HIGH};
 	const struct est_read hw_read_arr[4] = {
 				    {&btr_l, MTL_EST_BTR_LOW[mac]},
@@ -1052,7 +963,7 @@ static s32 validate_btr(struct osi_core_priv_data *const osi_core,
 		   (btr[0] + est->btr_offset[0]);
 	/* Check for BTR in case of new ETS while current GCL enabled */
 
-	val = osi_readla(osi_core, (u8 *)osi_core->base +
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			 MTL_EST_CONTROL[mac]);
 	if ((val & MTL_EST_CONTROL_EEST) != MTL_EST_CONTROL_EEST) {
 		ret = 0;
@@ -1065,8 +976,8 @@ static s32 validate_btr(struct osi_core_priv_data *const osi_core,
 				  hw_read_arr[i].var, OSI_DISABLE,
 				  bunk, mac);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "Reading failed for index\n",
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Reading failed for index: %lld\n",
 				     (u64)i);
 			goto done;
 		}
@@ -1077,16 +988,16 @@ static s32 validate_btr(struct osi_core_priv_data *const osi_core,
 	if (old_btr > btr_new) {
 		rem = (old_btr - btr_new) % old_ctr;
 		if ((rem != OSI_NONE) && (rem < PTP_CYCLE_8[mac])) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "invalid BTR", (u64)rem);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "invalid BTR: %lld\n", (u64)rem);
 			ret = -1;
 			goto done;
 		}
 	} else if (btr_new > old_btr) {
 		rem = (btr_new - old_btr) % old_ctr;
 		if ((rem != OSI_NONE) && (rem < PTP_CYCLE_8[mac])) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "invalid BTR", (u64)rem);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "invalid BTR: %lld\n", (u64)rem);
 			ret = -1;
 			goto done;
 		}
@@ -1121,12 +1032,10 @@ static s32 gcl_validate(struct osi_core_priv_data *const osi_core,
 {
 	const struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	const u32 PTP_CYCLE_8[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_8PTP_CYCLE,
 		MGBE_8PTP_CYCLE,
 		MGBE_8PTP_CYCLE
 		};
 	const u32 MTL_EST_STATUS[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_STATUS,
 		MGBE_MTL_EST_STATUS,
 		MGBE_MTL_EST_STATUS
 	};
@@ -1154,8 +1063,7 @@ static s32 gcl_validate(struct osi_core_priv_data *const osi_core,
 			} else if (((ctr - sum_ti) != 0U) &&
 				   ((ctr - sum_ti) < PTP_CYCLE_8[mac])) {
 				OSI_CORE_ERR(osi_core->osd,
-					     OSI_LOG_ARG_INVALID,
-					     "CTR issue due to trancate\n",
+					     "CTR issue due to trancate: %lld\n",
 					     (u64)i);
 				ret = -1;
 				goto done;
@@ -1166,8 +1074,8 @@ static s32 gcl_validate(struct osi_core_priv_data *const osi_core,
 			continue;
 		}
 
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "validation of GCL entry failed\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "validation of GCL entry failed: %lld\n",
 			     (u64)i);
 		ret = -1;
 		goto done;
@@ -1175,7 +1083,7 @@ static s32 gcl_validate(struct osi_core_priv_data *const osi_core,
 
 	/* Read EST_STATUS for bunk */
 	est_status = osi_readla(osi_core,
-				(u8 *)osi_core->base +
+				(u8 *)osi_core->mac_base +
 				MTL_EST_STATUS[mac]);
 	if ((est_status & MTL_EST_STATUS_SWOL) == 0U) {
 		bunk = MTL_EST_DBGB;
@@ -1212,29 +1120,27 @@ static s32 hw_est_write(struct osi_core_priv_data *osi_core,
 	u32 val = 0x0;
 	s32 ret = 0;
 	const u32 MTL_EST_DATA[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_DATA,
 		MGBE_MTL_EST_DATA,
 		MGBE_MTL_EST_DATA
 	};
 	const u32 MTL_EST_GCL_CONTROL[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_GCL_CONTROL,
 		MGBE_MTL_EST_GCL_CONTROL,
 		MGBE_MTL_EST_GCL_CONTROL
 	};
 
-	osi_writela(osi_core, data, (u8 *)osi_core->base +
+	osi_writela(osi_core, data, (u8 *)osi_core->mac_base +
 		   MTL_EST_DATA[osi_core->mac]);
 
 	val &= ~MTL_EST_ADDR_MASK;
 	val |= (gcla == 1U) ? 0x0U : MTL_EST_GCRR;
 	val |= MTL_EST_SRWO;
 	val |= addr_val;
-	osi_writela(osi_core, val, (u8 *)osi_core->base +
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base +
 		    MTL_EST_GCL_CONTROL[osi_core->mac]);
 
 	while (retry > 0U) {
 		retry--;
-		val = osi_readla(osi_core, (u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				 MTL_EST_GCL_CONTROL[osi_core->mac]);
 		if ((val & MTL_EST_SRWO) == MTL_EST_SRWO) {
 			if (once == 0U) {
@@ -1267,23 +1173,19 @@ static inline s32 configure_est_params(struct osi_core_priv_data *const osi_core
 	u32 i;
 	s32 ret;
 	u32 addr = 0x0;
-	const u32 MTL_EST_CTR_LOW[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_CTR_LOW,
-						MGBE_MTL_EST_CTR_LOW,
+	const u32 MTL_EST_CTR_LOW[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_CTR_LOW,
 						MGBE_MTL_EST_CTR_LOW};
-	const u32 MTL_EST_CTR_HIGH[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_CTR_HIGH,
-						MGBE_MTL_EST_CTR_HIGH,
+	const u32 MTL_EST_CTR_HIGH[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_CTR_HIGH,
 						MGBE_MTL_EST_CTR_HIGH};
-	const u32 MTL_EST_TER[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_TER,
-						MGBE_MTL_EST_TER,
+	const u32 MTL_EST_TER[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_TER,
 						MGBE_MTL_EST_TER};
-	const u32 MTL_EST_LLR[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_EST_LLR,
-						MGBE_MTL_EST_LLR,
+	const u32 MTL_EST_LLR[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_EST_LLR,
 						MGBE_MTL_EST_LLR};
 
 	ret = hw_est_write(osi_core, MTL_EST_CTR_LOW[osi_core->mac], est->ctr[0], 0);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"GCL CTR[0] failed\n", 0LL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"GCL CTR[0] failed: %lld\n", (u64)est->ctr[0]);
 		goto done;
 	}
 	/* check for est->ctr[i]  not more than FF, TODO as per hw config
@@ -1291,22 +1193,22 @@ static inline s32 configure_est_params(struct osi_core_priv_data *const osi_core
 	est->ctr[1] &= MTL_EST_CTR_HIGH_MAX;
 	ret = hw_est_write(osi_core, MTL_EST_CTR_HIGH[osi_core->mac], est->ctr[1], 0);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"GCL CTR[1] failed\n", 0LL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"GCL CTR[1] failed: %lld\n", (u64)est->ctr[1]);
 		goto done;
 	}
 
 	ret = hw_est_write(osi_core, MTL_EST_TER[osi_core->mac], est->ter, 0);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"GCL TER failed\n", 0LL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"GCL TER failed: %lld\n", (u64)est->ter);
 		goto done;
 	}
 
 	ret = hw_est_write(osi_core, MTL_EST_LLR[osi_core->mac], est->llr, 0);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"GCL LLR failed\n", 0LL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"GCL LLR failed: %lld\n", (u64)est->llr);
 		goto done;
 	}
 
@@ -1317,8 +1219,8 @@ static inline s32 configure_est_params(struct osi_core_priv_data *const osi_core
 		addr &= MTL_EST_ADDR_MASK;
 		ret = hw_est_write(osi_core, addr, est->gcl[i], 1);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-					"GCL enties write failed\n",
+			OSI_CORE_ERR(osi_core->osd, 
+					"GCL enties write failed: %lld\n",
 					(u64)i);
 			goto done;
 		}
@@ -1355,20 +1257,17 @@ s32 hw_config_est(struct osi_core_priv_data *const osi_core,
 {
 	u32 btr[2] = {0};
 	u32 val = 0x0;
-	void *base = osi_core->base;
+	void *base = osi_core->mac_base;
 	s32 ret = 0;
 	const u32 MTL_EST_CONTROL[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL,
 		MGBE_MTL_EST_CONTROL,
 		MGBE_MTL_EST_CONTROL
 	};
 	const u32 MTL_EST_BTR_LOW[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_BTR_LOW,
 		MGBE_MTL_EST_BTR_LOW,
 		MGBE_MTL_EST_BTR_LOW
 	};
 	const u32 MTL_EST_BTR_HIGH[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_BTR_HIGH,
 		MGBE_MTL_EST_BTR_HIGH,
 		MGBE_MTL_EST_BTR_HIGH
 	};
@@ -1385,14 +1284,14 @@ s32 hw_config_est(struct osi_core_priv_data *const osi_core,
 		btr[0] = est->btr[0];
 		btr[1] = est->btr[1];
 		if ((btr[0] == 0U) && (btr[1] == 0U)) {
-			core_get_systime_from_mac(osi_core->base,
+			core_get_systime_from_mac(osi_core->mac_base,
 						  osi_core->mac,
 						  &btr[1], &btr[0]);
 		}
 
 		if (gcl_validate(osi_core, est, btr, osi_core->mac) < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "GCL validation failed\n", 0LL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "GCL validation failed: %lld\n", (u64)est->gcl[0]);
 			ret = -1;
 			goto done;
 		}
@@ -1407,8 +1306,8 @@ s32 hw_config_est(struct osi_core_priv_data *const osi_core,
 		ret = hw_est_write(osi_core, MTL_EST_BTR_LOW[osi_core->mac],
 				btr[0] + est->btr_offset[0], OSI_DISABLE);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "GCL BTR[0] failed\n",
+			OSI_CORE_ERR(osi_core->osd, 
+				     "GCL BTR[0] failed: %lld\n",
 				     (btr[0] + est->btr_offset[0]));
 			goto done;
 		}
@@ -1416,8 +1315,8 @@ s32 hw_config_est(struct osi_core_priv_data *const osi_core,
 		ret = hw_est_write(osi_core, MTL_EST_BTR_HIGH[osi_core->mac],
 				btr[1] + est->btr_offset[1], OSI_DISABLE);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "GCL BTR[1] failed\n",
+			OSI_CORE_ERR(osi_core->osd, 
+				     "GCL BTR[1] failed: %lld\n",
 				     (btr[1] + est->btr_offset[1]));
 			goto done;
 		}
@@ -1478,32 +1377,25 @@ static s32 hw_config_fpe_pec_enable(struct osi_core_priv_data *const osi_core,
 	u32 temp_shift = 0U;
 	s32 ret = 0;
 
-	const u32 MTL_FPE_CTS[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_FPE_CTS,
-						MGBE_MTL_FPE_CTS,
+	const u32 MTL_FPE_CTS[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_FPE_CTS,
 						MGBE_MTL_FPE_CTS};
-	const u32 MAC_FPE_CTS[OSI_MAX_MAC_IP_TYPES] = {EQOS_MAC_FPE_CTS,
-						MGBE_MAC_FPE_CTS,
+	const u32 MAC_FPE_CTS[OSI_MAX_MAC_IP_TYPES] = {MGBE_MAC_FPE_CTS,
 						MGBE_MAC_FPE_CTS};
-	const u32 max_number_queue[OSI_MAX_MAC_IP_TYPES] = {OSI_EQOS_MAX_NUM_QUEUES,
-						OSI_MGBE_MAX_NUM_QUEUES,
+	const u32 max_number_queue[OSI_MAX_MAC_IP_TYPES] = {OSI_MGBE_MAX_NUM_QUEUES,
 						OSI_MGBE_MAX_NUM_QUEUES};
-	const u32 MAC_RQC1R[OSI_MAX_MAC_IP_TYPES] = {EQOS_MAC_RQC1R,
-						MGBE_MAC_RQC1R,
+	const u32 MAC_RQC1R[OSI_MAX_MAC_IP_TYPES] = {MGBE_MAC_RQC1R,
 						MGBE_MAC_RQC1R};
-	const u32 MAC_RQC1R_RQ[OSI_MAX_MAC_IP_TYPES] = {EQOS_MAC_RQC1R_FPRQ,
-						MGBE_MAC_RQC1R_RQ,
+	const u32 MAC_RQC1R_RQ[OSI_MAX_MAC_IP_TYPES] = {MGBE_MAC_RQC1R_RQ,
 						MGBE_MAC_RQC1R_RQ};
-	const u32 MAC_RQC1R_RQ_SHIFT[OSI_MAX_MAC_IP_TYPES] = {EQOS_MAC_RQC1R_FPRQ_SHIFT,
-						MGBE_MAC_RQC1R_RQ_SHIFT,
+	const u32 MAC_RQC1R_RQ_SHIFT[OSI_MAX_MAC_IP_TYPES] = {MGBE_MAC_RQC1R_RQ_SHIFT,
 						MGBE_MAC_RQC1R_RQ_SHIFT};
-	const u32 MTL_FPE_ADV[OSI_MAX_MAC_IP_TYPES] = {EQOS_MTL_FPE_ADV,
-						MGBE_MTL_FPE_ADV,
+	const u32 MTL_FPE_ADV[OSI_MAX_MAC_IP_TYPES] = {MGBE_MTL_FPE_ADV,
 						MGBE_MTL_FPE_ADV};
 	const u32 MTL_FPE_HADV_VAL[OSI_SPEED_MAX_INX] = {FPE_1G_HADV, FPE_1G_HADV,
 						FPE_1G_HADV, FPE_10G_HADV, FPE_10G_HADV,
 						FPE_10G_HADV, FPE_25G_HADV};
 
-	val = osi_readla(osi_core, (u8 *)osi_core->base + MTL_FPE_CTS[osi_core->mac]);
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MTL_FPE_CTS[osi_core->mac]);
 	val &= ~MTL_FPE_CTS_PEC;
 	for (i = 0U; i < OSI_MAX_TC_NUM; i++) {
 		/* max 8 bit for this structure fot TC/TXQ. Set the TC for express or
@@ -1518,42 +1410,41 @@ static s32 hw_config_fpe_pec_enable(struct osi_core_priv_data *const osi_core,
 			val |= temp1;
 		}
 	}
-	osi_writela(osi_core, val, (u8 *)osi_core->base + MTL_FPE_CTS[osi_core->mac]);
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MTL_FPE_CTS[osi_core->mac]);
 	if ((fpe->rq == 0x0U) || (fpe->rq >= max_number_queue[osi_core->mac])) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"FPE init failed due to wrong RQ\n", fpe->rq);
+		OSI_CORE_ERR(osi_core->osd, 
+				"FPE init failed due to wrong RQ: %lld\n", (u64)fpe->rq);
 		ret = -1;
 		goto done;
 	}
 
-	val = osi_readla(osi_core, (u8 *)osi_core->base + (MAC_RQC1R[osi_core->mac]));
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + (MAC_RQC1R[osi_core->mac]));
 	val &= ~MAC_RQC1R_RQ[osi_core->mac];
 	temp = fpe->rq;
 	temp = temp << ((MAC_RQC1R_RQ_SHIFT[osi_core->mac]) & 0x1FU);
 	temp = (temp & MAC_RQC1R_RQ[osi_core->mac]);
 	val |= temp;
 	osi_core->residual_queue = fpe->rq;
-	osi_writela(osi_core, val, (u8 *)osi_core->base + MAC_RQC1R[osi_core->mac]);
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MAC_RQC1R[osi_core->mac]);
 
-	if (osi_core->mac != OSI_MAC_HW_EQOS) {
-		val = osi_readla(osi_core, (u8 *)osi_core->base + MGBE_MAC_RQC4R);
-		val &= ~MGBE_MAC_RQC4R_PMCBCQ;
-		temp = fpe->rq;
-		temp = temp << MGBE_MAC_RQC4R_PMCBCQ_SHIFT;
-		temp = (temp & MGBE_MAC_RQC4R_PMCBCQ);
-		val |= temp;
-		osi_writela(osi_core, val, (u8 *)osi_core->base + MGBE_MAC_RQC4R);
-	}
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MGBE_MAC_RQC4R);
+	val &= ~MGBE_MAC_RQC4R_PMCBCQ;
+	temp = fpe->rq;
+	temp = temp << MGBE_MAC_RQC4R_PMCBCQ_SHIFT;
+	temp = (temp & MGBE_MAC_RQC4R_PMCBCQ);
+	val |= temp;
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MGBE_MAC_RQC4R);
+
 	/* initiate SVER for SMD-V and SMD-R */
-	val = osi_readla(osi_core, (u8 *)osi_core->base + (MAC_FPE_CTS[osi_core->mac]));
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + (MAC_FPE_CTS[osi_core->mac]));
 	val |= MAC_FPE_CTS_SVER;
-	osi_writela(osi_core, val, (u8 *)osi_core->base + (MAC_FPE_CTS[osi_core->mac]));
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + (MAC_FPE_CTS[osi_core->mac]));
 
-	val = osi_readla(osi_core, (u8 *)osi_core->base + (MTL_FPE_ADV[osi_core->mac]));
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + (MTL_FPE_ADV[osi_core->mac]));
 	val &= ~MTL_FPE_ADV_HADV_MASK;
 	index = speed_index(osi_core->speed);
 	val |= MTL_FPE_HADV_VAL[index];
-	osi_writela(osi_core, val, (u8 *)osi_core->base + (MTL_FPE_ADV[osi_core->mac]));
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + (MTL_FPE_ADV[osi_core->mac]));
 
 	if (osi_core->mac == OSI_MAC_HW_MGBE) {
 #ifdef MACSEC_SUPPORT
@@ -1586,56 +1477,50 @@ s32 hw_config_fpe(struct osi_core_priv_data *const osi_core,
 	u32 val = 0U;
 	s32 ret = 0;
 	const u32 MTL_FPE_CTS[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_FPE_CTS,
 		MGBE_MTL_FPE_CTS,
 		MGBE_MTL_FPE_CTS
 	};
 	const u32 MAC_FPE_CTS[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_FPE_CTS,
 		MGBE_MAC_FPE_CTS,
 		MGBE_MAC_FPE_CTS
 	};
 
 	/* Only 8 TC */
 	if (fpe->tx_queue_preemption_enable > 0xFFU) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "FPE input tx_queue_preemption_enable is invalid\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "FPE input tx_queue_preemption_enable is invalid: %lld\n",
 			     (u64)fpe->tx_queue_preemption_enable);
 		ret = -1;
 		goto error;
 	}
 
-	if (osi_core->mac_ver != OSI_EQOS_MAC_5_30) {
 #ifdef MACSEC_SUPPORT
-		osi_lock_irq_enabled(&osi_core->macsec_fpe_lock);
-		/* MACSEC and FPE cannot coexist on MGBE of T234 refer bug 3484034
-		 * Both EQOS and MGBE of T264 cannot have macsec and fpe enabled simultaneously */
-		if (osi_core->is_macsec_enabled == OSI_ENABLE) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "FPE and MACSEC cannot co-exist\n", 0ULL);
-			ret = -1;
-			goto done;
-		}
-#endif /*  MACSEC_SUPPORT */
+	osi_lock_irq_enabled(&osi_core->macsec_fpe_lock);
+	/* MACSEC and FPE cannot coexist on MGBE of T234 refer bug 3484034
+	 * Both EQOS and MGBE of T264 cannot have macsec and fpe enabled simultaneously */
+	if (osi_core->is_macsec_enabled == OSI_ENABLE) {
+		OSI_CORE_ERR(osi_core->osd, 
+				"FPE and MACSEC cannot co-exist: %lld\n", (u64)osi_core->is_macsec_enabled);
+		ret = -1;
+		goto done;
 	}
+#endif /*  MACSEC_SUPPORT */
 
 	osi_core->fpe_ready = OSI_DISABLE;
 
 	if (((fpe->tx_queue_preemption_enable << MTL_FPE_CTS_PEC_SHIFT) &
 	     MTL_FPE_CTS_PEC) == OSI_DISABLE) {
-		val = osi_readla(osi_core, (u8 *)osi_core->base + MTL_FPE_CTS[osi_core->mac]);
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MTL_FPE_CTS[osi_core->mac]);
 		val &= ~MTL_FPE_CTS_PEC;
-		osi_writela(osi_core, val, (u8 *)osi_core->base + MTL_FPE_CTS[osi_core->mac]);
+		osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MTL_FPE_CTS[osi_core->mac]);
 
-		val = osi_readla(osi_core, (u8 *)osi_core->base + MAC_FPE_CTS[osi_core->mac]);
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MAC_FPE_CTS[osi_core->mac]);
 		val &= ~MAC_FPE_CTS_EFPE;
-		osi_writela(osi_core, val, (u8 *)osi_core->base + MAC_FPE_CTS[osi_core->mac]);
+		osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MAC_FPE_CTS[osi_core->mac]);
 
-		if (osi_core->mac != OSI_MAC_HW_EQOS) {
 #ifdef MACSEC_SUPPORT
-			osi_core->is_fpe_enabled = OSI_DISABLE;
+		osi_core->is_fpe_enabled = OSI_DISABLE;
 #endif /*  MACSEC_SUPPORT */
-		}
 		ret = 0;
 	} else {
 		ret = hw_config_fpe_pec_enable(osi_core, fpe);
@@ -1645,11 +1530,9 @@ s32 hw_config_fpe(struct osi_core_priv_data *const osi_core,
 	}
 done:
 
-	if (osi_core->mac_ver != OSI_EQOS_MAC_5_30) {
 #ifdef MACSEC_SUPPORT
-		osi_unlock_irq_enabled(&osi_core->macsec_fpe_lock);
+	osi_unlock_irq_enabled(&osi_core->macsec_fpe_lock);
 #endif /*  MACSEC_SUPPORT */
-	}
 
 error:
 	return ret;
@@ -1668,12 +1551,11 @@ static inline void enable_mtl_interrupts(struct osi_core_priv_data *osi_core)
 {
 	u32  mtl_est_ir = OSI_DISABLE;
 	const u32 MTL_EST_ITRE[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_ITRE,
 		MGBE_MTL_EST_ITRE,
 		MGBE_MTL_EST_ITRE
 	};
 
-	mtl_est_ir = osi_readla(osi_core, (u8 *)osi_core->base +
+	mtl_est_ir = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MTL_EST_ITRE[osi_core->mac]);
 	/* enable only MTL interrupt realted to
 	 * Constant Gate Control Error
@@ -1685,7 +1567,7 @@ static inline void enable_mtl_interrupts(struct osi_core_priv_data *osi_core)
 	mtl_est_ir |= (MTL_EST_ITRE_CGCE | MTL_EST_ITRE_IEHS |
 		       MTL_EST_ITRE_IEHF | MTL_EST_ITRE_IEBE |
 		       MTL_EST_ITRE_IECC);
-	osi_writela(osi_core, mtl_est_ir, (u8 *)osi_core->base +
+	osi_writela(osi_core, mtl_est_ir, (u8 *)osi_core->mac_base +
 		    MTL_EST_ITRE[osi_core->mac]);
 }
 
@@ -1702,22 +1584,20 @@ static inline void enable_fpe_interrupts(struct osi_core_priv_data *osi_core)
 {
 	u32  value = OSI_DISABLE;
 	const u32 MAC_IER[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_IMR,
 		MGBE_MAC_IER,
 		MGBE_MAC_IER
 	};
 	const u32 IMR_FPEIE[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_IMR_FPEIE,
 		MGBE_IMR_FPEIE,
 		MGBE_IMR_FPEIE
 	};
 
 	/* Read MAC IER Register and enable Frame Preemption Interrupt
 	 * Enable */
-	value = osi_readla(osi_core, (u8 *)osi_core->base +
+	value = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 			   MAC_IER[osi_core->mac]);
 	value |= IMR_FPEIE[osi_core->mac];
-	osi_writela(osi_core, value, (u8 *)osi_core->base +
+	osi_writela(osi_core, value, (u8 *)osi_core->mac_base +
 		    MAC_IER[osi_core->mac]);
 }
 
@@ -1764,89 +1644,73 @@ void hw_tsn_init(struct osi_core_priv_data *osi_core)
 	u32 val = 0x0;
 	u32 temp = 0U;
 	const u32 MTL_EST_CONTROL[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL,
 		MGBE_MTL_EST_CONTROL,
 		MGBE_MTL_EST_CONTROL
 	};
 	const u32 MTL_EST_CONTROL_PTOV[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL_PTOV,
 		MGBE_MTL_EST_CONTROL_PTOV,
 		MGBE_MTL_EST_CONTROL_PTOV
 	};
 	const u32 MTL_EST_PTOV_RECOMMEND[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_PTOV_RECOMMEND,
 		MGBE_MTL_EST_PTOV_RECOMMEND,
 		MGBE_MTL_EST_PTOV_RECOMMEND
 	};
 	const u32 MTL_EST_CONTROL_PTOV_SHIFT[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL_PTOV_SHIFT,
 		MGBE_MTL_EST_CONTROL_PTOV_SHIFT,
 		MGBE_MTL_EST_CONTROL_PTOV_SHIFT
 	};
 	const u32 MTL_EST_CONTROL_CTOV[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL_CTOV,
 		MGBE_MTL_EST_CONTROL_CTOV,
 		MGBE_MTL_EST_CONTROL_CTOV
 	};
 	const u32 MTL_EST_CTOV_RECOMMEND[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CTOV_RECOMMEND,
 		MGBE_MTL_EST_CTOV_RECOMMEND,
 		MGBE_MTL_EST_CTOV_RECOMMEND
 	};
 	const u32 MTL_EST_CONTROL_CTOV_SHIFT[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL_CTOV_SHIFT,
 		MGBE_MTL_EST_CONTROL_CTOV_SHIFT,
 		MGBE_MTL_EST_CONTROL_CTOV_SHIFT
 	};
 	const u32 MTL_EST_CONTROL_LCSE[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL_LCSE,
 		MGBE_MTL_EST_CONTROL_LCSE,
 		MGBE_MTL_EST_CONTROL_LCSE
 	};
 	const u32 MTL_EST_CONTROL_LCSE_VAL[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL_LCSE_VAL,
 		MGBE_MTL_EST_CONTROL_LCSE_VAL,
 		MGBE_MTL_EST_CONTROL_LCSE_VAL
 	};
 	const u32 MTL_EST_CONTROL_DDBF[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_CONTROL_DDBF,
 		MGBE_MTL_EST_CONTROL_DDBF,
 		MGBE_MTL_EST_CONTROL_DDBF
 	};
 	const u32 MTL_EST_OVERHEAD[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_OVERHEAD,
 		MGBE_MTL_EST_OVERHEAD,
 		MGBE_MTL_EST_OVERHEAD
 	};
 	const u32 MTL_EST_OVERHEAD_OVHD[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_OVERHEAD_OVHD,
 		MGBE_MTL_EST_OVERHEAD_OVHD,
 		MGBE_MTL_EST_OVERHEAD_OVHD
 	};
 	const u32 MTL_EST_OVERHEAD_RECOMMEND[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_EST_OVERHEAD_RECOMMEND,
 		MGBE_MTL_EST_OVERHEAD_RECOMMEND,
 		MGBE_MTL_EST_OVERHEAD_RECOMMEND
 	};
 	const u32 MAC_RQC1R[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_RQC1R,
 		MGBE_MAC_RQC1R,
 		MGBE_MAC_RQC1R
 	};
 	const u32 MAC_RQC1R_RQ[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_RQC1R_FPRQ,
 		MGBE_MAC_RQC1R_RQ,
 		MGBE_MAC_RQC1R_RQ
 	};
 	const u32 MAC_RQC1R_RQ_SHIFT[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_RQC1R_FPRQ_SHIFT,
 		MGBE_MAC_RQC1R_RQ_SHIFT,
 		MGBE_MAC_RQC1R_RQ_SHIFT
 	};
 
 	/* Configure EST paramenters */
 	save_gcl_params(osi_core);
-	val = osi_readla(osi_core, (u8 *)osi_core->base + MTL_EST_CONTROL[osi_core->mac]);
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MTL_EST_CONTROL[osi_core->mac]);
 
 	/*
 	 * PTOV PTP clock period * 6
@@ -1871,40 +1735,35 @@ void hw_tsn_init(struct osi_core_priv_data *osi_core)
 	val &= ~MTL_EST_CONTROL_LCSE[osi_core->mac];
 	val |= MTL_EST_CONTROL_LCSE_VAL[osi_core->mac];
 
-	if (osi_core->mac == OSI_MAC_HW_EQOS) {
-		val &= ~EQOS_MTL_EST_CONTROL_DFBS;
-	}
 	val &= ~MTL_EST_CONTROL_DDBF[osi_core->mac];
 	val |= MTL_EST_CONTROL_DDBF[osi_core->mac];
-	osi_writela(osi_core, val, (u8 *)osi_core->base + MTL_EST_CONTROL[osi_core->mac]);
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MTL_EST_CONTROL[osi_core->mac]);
 
-	val = osi_readla(osi_core, (u8 *)osi_core->base + MTL_EST_OVERHEAD[osi_core->mac]);
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MTL_EST_OVERHEAD[osi_core->mac]);
 	val &= ~MTL_EST_OVERHEAD_OVHD[osi_core->mac];
 	/* As per hardware programming info */
 	val |= MTL_EST_OVERHEAD_RECOMMEND[osi_core->mac];
-	osi_writela(osi_core, val, (u8 *)osi_core->base + MTL_EST_OVERHEAD[osi_core->mac]);
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MTL_EST_OVERHEAD[osi_core->mac]);
 
 	enable_mtl_interrupts(osi_core);
 
 	/* Configure FPE parameters */
-	val = osi_readla(osi_core, (u8 *)osi_core->base + MAC_RQC1R[osi_core->mac]);
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MAC_RQC1R[osi_core->mac]);
 	val &= ~MAC_RQC1R_RQ[osi_core->mac];
 	temp = osi_core->residual_queue;
 	temp = temp << ((MAC_RQC1R_RQ_SHIFT[osi_core->mac]) & 0x1FU);
 	temp = (temp & MAC_RQC1R_RQ[osi_core->mac]);
 	val |= temp;
-	osi_writela(osi_core, val, (u8 *)osi_core->base + MAC_RQC1R[osi_core->mac]);
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MAC_RQC1R[osi_core->mac]);
 
-	if (osi_core->mac != OSI_MAC_HW_EQOS) {
-		val = osi_readla(osi_core, (u8 *)osi_core->base +
-				 MGBE_MAC_RQC4R);
-		val &= ~MGBE_MAC_RQC4R_PMCBCQ;
-		temp = osi_core->residual_queue;
-		temp = temp << MGBE_MAC_RQC4R_PMCBCQ_SHIFT;
-		temp = (temp & MGBE_MAC_RQC4R_PMCBCQ);
-		val |= temp;
-		osi_writela(osi_core, val, (u8 *)osi_core->base + MGBE_MAC_RQC4R);
-	}
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
+			MGBE_MAC_RQC4R);
+	val &= ~MGBE_MAC_RQC4R_PMCBCQ;
+	temp = osi_core->residual_queue;
+	temp = temp << MGBE_MAC_RQC4R_PMCBCQ_SHIFT;
+	temp = (temp & MGBE_MAC_RQC4R_PMCBCQ);
+	val |= temp;
+	osi_writela(osi_core, val, (u8 *)osi_core->mac_base + MGBE_MAC_RQC4R);
 
 	enable_fpe_interrupts(osi_core);
 
@@ -2000,7 +1859,7 @@ s32 hsi_common_error_inject(struct osi_core_priv_data *osi_core,
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = error_code;
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
+		OSI_CORE_ERR(osi_core->osd, 
 			     "Invalid error code\n", (u32)error_code);
 		ret = -1;
 		break;
@@ -2032,26 +1891,24 @@ static inline u64 hsi_update_mmc_val(struct osi_core_priv_data *osi_core,
 					  u64 offset)
 {
 	u64 temp = 0;
-	u32 value = osi_readl((u8 *)osi_core->base + offset);
+	u32 value = osi_readl((u8 *)osi_core->mac_base + offset);
 	const u32 MMC_CNTRL[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MMC_CNTRL,
 		MGBE_MMC_CNTRL,
 		MGBE_MMC_CNTRL
 	};
 	const u32 MMC_CNTRL_CNTRST[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MMC_CNTRL_CNTRST,
 		MGBE_MMC_CNTRL_CNTRST,
 		MGBE_MMC_CNTRL_CNTRST
 	};
 
 	temp = last_value + value;
 	if (temp < last_value) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_OUTOFBOUND,
+		OSI_CORE_ERR(osi_core->osd, 
 			     "Value overflow resetting  all counters\n", (u64)offset);
-		value = osi_readl((u8 *)osi_core->base + MMC_CNTRL[osi_core->mac]);
+		value = osi_readl((u8 *)osi_core->mac_base + MMC_CNTRL[osi_core->mac]);
 		/* self-clear bit in one clock cycle */
 		value |= MMC_CNTRL_CNTRST[osi_core->mac];
-		osi_writel(value, (u8 *)osi_core->base + MMC_CNTRL[osi_core->mac]);
+		osi_writel(value, (u8 *)osi_core->mac_base + MMC_CNTRL[osi_core->mac]);
 		osi_memset(&osi_core->mmc, 0U, sizeof(struct osi_mmc_counters));
 	}
 
@@ -2075,27 +1932,22 @@ void hsi_read_err(struct osi_core_priv_data *const osi_core)
 {
 	struct osi_mmc_counters *mmc = &osi_core->mmc;
 	const u32 RXCRCERROR[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MMC_RXCRCERROR,
 		MGBE_MMC_RXCRCERROR_L,
 		MGBE_MMC_RXCRCERROR_L
 	};
 	const u32 RXIPV4_HDRERR_PKTS[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MMC_RXIPV4_HDRERR_PKTS,
 		MGBE_MMC_RXIPV4_HDRERR_PKTS_L,
 		MGBE_MMC_RXIPV4_HDRERR_PKTS_L
 	};
 	const u32 RXIPV6_HDRERR_PKTS[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MMC_RXIPV6_HDRERR_PKTS,
 		MGBE_MMC_RXIPV6_HDRERR_PKTS_L,
 		MGBE_MMC_RXIPV6_HDRERR_PKTS_L
 	};
 	const u32 RXUDP_ERR_PKTS[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MMC_RXUDP_ERR_PKTS,
 		MGBE_MMC_RXUDP_ERR_PKTS_L,
 		MGBE_MMC_RXUDP_ERR_PKTS_L
 	};
 	const u32 RXTCP_ERR_PKTS[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MMC_RXTCP_ERR_PKTS,
 		MGBE_MMC_RXTCP_ERR_PKTS_L,
 		MGBE_MMC_RXTCP_ERR_PKTS_L
 	};
@@ -2140,7 +1992,6 @@ static void prepare_l3l4_ctr_reg(const struct osi_core_priv_data *const osi_core
 	u32 dst_addr_match = OSI_BIT(0);
 #endif /* !OSI_STRIPPED_LIB */
 	const u32 dma_chan_en_shift[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAC_L3L4_CTR_DMCHEN_SHIFT,
 		MGBE_MAC_L3L4_CTR_DMCHEN_SHIFT,
 		MGBE_MAC_L3L4_CTR_DMCHEN_SHIFT
 	};
@@ -2359,12 +2210,10 @@ s32 hw_validate_avb_input(struct osi_core_priv_data *const osi_core,
 {
 	s32 ret = 0;
 	u32 ETS_QW_ISCQW_MASK[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_TXQ_ETS_QW_ISCQW_MASK,
 		MGBE_MTL_TCQ_ETS_QW_ISCQW_MASK,
 		MGBE_MTL_TCQ_ETS_QW_ISCQW_MASK
 	};
 	u32 ETS_SSCR_SSC_MASK[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MTL_TXQ_ETS_SSCR_SSC_MASK,
 		MGBE_MTL_TCQ_ETS_SSCR_SSC_MASK,
 		MGBE_MTL_TCQ_ETS_SSCR_SSC_MASK
 	};
@@ -2373,30 +2222,30 @@ s32 hw_validate_avb_input(struct osi_core_priv_data *const osi_core,
 	u32 mac = osi_core->mac;
 
 	if (avb->idle_slope > ETS_QW_ISCQW_MASK[mac]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid idle_slope\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid idle_slope：%lld\n",
 			     (u64)avb->idle_slope);
 		ret = -1;
 		goto fail;
 	}
 	if (avb->send_slope > ETS_SSCR_SSC_MASK[mac]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid send_slope\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid send_slope：%lld\n",
 			     (u64)avb->send_slope);
 		ret = -1;
 		goto fail;
 	}
 	if (avb->hi_credit > ETS_HC_BOUND) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid hi credit\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid hi credit：%lld\n",
 			     (u64)avb->hi_credit);
 		ret = -1;
 		goto fail;
 	}
 	if ((avb->low_credit < ETS_LC_BOUND) &&
 	    (avb->low_credit != 0U)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid low credit\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid low credit：%lld\n",
 			     (u64)avb->low_credit);
 		ret = -1;
 		goto fail;
@@ -2407,7 +2256,7 @@ fail:
 
 void hw_config_flow_control(struct osi_core_priv_data *const osi_core)
 {
-	u8 *addr = (u8 *)osi_core->base;
+	u8 *addr = (u8 *)osi_core->mac_base;
 	u32 val;
 
 	/* Configure Tx flow control */

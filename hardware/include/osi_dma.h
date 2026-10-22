@@ -74,37 +74,45 @@
 #define OSI_VM_IRQ_RX_CHAN_MASK(x)	OSI_BIT(((x) << 1U) + 1U)
 /** @} */
 
-#ifdef LOG_OSI
 /**
  * OSI error macro definition,
  * @param[in] priv: OSD private data OR NULL
  * @param[in] type: error type
- * @param[in] err:  error string
- * @param[in] loga: error additional information
+ * @param[in] fmt:  format string
+ * @param[in] ...:  variable arguments
  */
-#define OSI_DMA_ERR(priv, type, err, loga)				\
+#define OSI_DMA_ERR(dev, fmt, ...)				\
 {								\
-	osi_dma->osd_ops.ops_log(priv, __func__, __LINE__,	\
-				 OSI_LOG_ERR, type, err, loga);	\
+	osi_dma->osd_ops.log(dev, __func__, __LINE__,	\
+				 OSI_LOG_ERR, fmt, ##__VA_ARGS__);	\
 }
 
-#ifndef OSI_STRIPPED_LIB
+#ifdef INFO_OSI
+
 /**
  * OSI info macro definition
  * @param[in] priv: OSD private data OR NULL
  * @param[in] type: error type
- * @param[in] err:  error string
- * @param[in] loga: error additional information
+ * @param[in] fmt:  format string
+ * @param[in] ...:  variable arguments
  */
-#define OSI_DMA_INFO(priv, type, err, loga)				\
+#define OSI_DMA_INFO(fmt, ...)				\
 {								\
-	osi_dma->osd_ops.ops_log(priv, __func__, __LINE__,	\
-				 OSI_LOG_INFO, type, err, loga);\
+	pr_info(fmt, ##__VA_ARGS__);\
 }
-#endif /* !OSI_STRIPPED_LIB */
 #else
-#define OSI_DMA_ERR(priv, type, err, loga)
-#endif /* LOG_OSI */
+#define OSI_DMA_INFO(fmt, ...)
+#endif /* INFO_OSI */
+
+#ifdef DBG_OSI
+extern u64 dma_base;
+#define OSI_DMA_DEBUG(fmt, ...)				\
+{								\
+	pr_info(fmt, ##__VA_ARGS__);\
+}
+#else
+#define OSI_DMA_DEBUG(fmt, ...)
+#endif /* DBG_OSI */
 
 /**
  * @addtogroup EQOS-PKT Packet context fields
@@ -668,17 +676,11 @@ struct osd_dma_ops {
 	void (*realloc_buf)(void *priv, struct osi_rx_ring *rx_ring,
 			    u32 chan);
 	/** ops_log function callback, called for error logging*/
-	void (*ops_log)(void *priv, const char *func, u32 line,
-			u32 level, u32 type, const char *err,
-			u64 loga);
+	void (*log)(void *priv, const char *func, u32 line,
+			u32 level, const char *fmt, ...);
+	void (*dbg)(const char * fmt, ...);
 	/** micro second delay function callback */
 	void (*udelay)(u64 usec);
-#ifdef OSI_DEBUG
-	/**.printf function callback */
-	void (*printf)(struct osi_dma_priv_data *osi_dma,
-		       u32 type,
-		       const char *fmt, ...);
-#endif /* OSI_DEBUG */
 };
 
 //#ifdef OSI_DEBUG
@@ -707,6 +709,7 @@ struct osi_dma_priv_data {
 	struct osi_rx_ring *rx_ring[OSI_MGBE_MAX_NUM_CHANS];
 	/** Memory mapped base address of MAC IP. Should be non NULL */
 	void *base;
+	
 	/** Pointer to OSD private data structure,
 	 *  This is passed as priv argument for all callbacks of osd_dma_ops
 	 */
@@ -1518,8 +1521,8 @@ u32 osi_is_mac_enabled(struct osi_dma_priv_data *const osi_dma);
  *
  */
 #endif
-s32 osi_handle_dma_intr(struct osi_dma_priv_data *osi_dma,
-			    u32 chan, u32 tx_rx, u32 en_dis);
+s32 osi_handle_tx_intr(struct osi_dma_priv_data *osi_dma, u32 chan, u32 flag);
+s32 osi_handle_rx_intr(struct osi_dma_priv_data *osi_dma, u32 chan, u32 flag);
 
 //#ifdef OSI_DEBUG
 /**

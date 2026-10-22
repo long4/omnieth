@@ -148,7 +148,7 @@ static inline int32_t ether_transmit(struct ether_priv_data *pdata, unsigned int
 	if (ether_avail_txdesc_cnt_test(tx_ring, osi_dma) < g_num_frags) {
 		// TODO
 		if ((iterations % 100000000) == 0) {
-			pr_info("Error Tx Add Wait desc %s %d print_once %llu \n",
+			OSD_DEV_ERR(pdata->dev, "Error Tx Add Wait desc %s %d print_once %llu \n",
 				__func__, ether_avail_txdesc_cnt_test(tx_ring, osi_dma), iterations);
 		}
 		osi_process_tx_completions(osi_dma, chan, 512);

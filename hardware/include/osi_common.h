@@ -29,7 +29,7 @@
 /**
  * @brief Maximum number of supported MAC IP types (EQOS, MGBE, MGBE_T26X)
  */
-#define OSI_MAX_MAC_IP_TYPES	3U
+#define OSI_MAX_MAC_IP_TYPES	2U
 
 /**
  * @addtogroup FC Flow Control Threshold Macros
@@ -184,10 +184,10 @@
 /* log levels */
 
 #define OSI_LOG_INFO			1U
-#ifndef OSI_STRIPPED_LIB
 #define OSI_LOG_WARN			2U
-#endif /* OSI_STRIPPED_LIB */
-#define OSI_LOG_ERR			3U
+#define OSI_LOG_ERR 			3U
+#define OSI_LOG_DBG	    		4U
+
 /* Error types */
 #define OSI_LOG_ARG_OUTOFBOUND          1U
 #define OSI_LOG_ARG_INVALID		2U
@@ -200,9 +200,9 @@
 #define OSI_TXRX_IDLE_RETRY	5000U
 #define OSI_DELAY_COUNT		10U
 
-#define EQOS_DMA_CHX_STATUS(x)		((0x0080U * (x)) + 0x1160U)
 #define MGBE_DMA_CHX_STATUS(x)		((0x0080U * (x)) + 0x3160U)
-#define EQOS_DMA_CHX_IER(x)		((0x0080U * (x)) + 0x1134U)
+#define MGBE_DMA_CHX_INTR_ENA(x)        ((0x0080U * (x)) + 0x3138U)
+
 
 /* FIXME add logic based on HW version */
 /**
@@ -224,7 +224,8 @@
 #define OSI_MGBE_MAX_NUM_CHANS		48U
 #endif
 
-#define OSI_MGBE_T23X_MAX_NUM_CHANS	10U
+#define OSI_MGBE_OB01_MAX_NUM_CHANS	12U
+
 /**
  * @brief Maximum number of PDMA channels in MGBE
  */
@@ -236,9 +237,9 @@
 #define OSI_MGBE_MAX_NUM_RIIT		4U
 
 /**
- * @brief Maximum number of Secure Channels supported
+ * @brief Maximum number of mmc stat supported
  */
-#define OSI_MACSEC_MMC_SC_MAX		128
+#define OSI_MACSEC_MMC_SC_MAX		48U
 
 #ifndef OSI_STRIPPED_LIB
 /* HW supports 8 Hash table regs, but eqos_validate_core_regs only checks 4 */
@@ -248,21 +249,13 @@
 #define MAC_VERSION		0x110
 #define MAC_VERSION_SNVER_MASK	0x7FU
 
-/** @brief flag indicating EQOS MAC */
-#define OSI_MAC_HW_EQOS		0U
 /** @brief flag indicating MGBE MAC */
-#define OSI_MAC_HW_MGBE		1U
+#define OSI_MAC_HW_MGBE		0U
 /** @brief flag indicating MGBE MAC on T26X */
-#define OSI_MAC_HW_MGBE_T26X	2U
+#define OSI_MAC_HW_MGBE_T26X	1U
 
-/** MAC version type for EQOS version previous to 5.30 */
-#define MAC_CORE_VER_TYPE_EQOS		0U
-/** MAC version type for EQOS version 5.30 */
-#define MAC_CORE_VER_TYPE_EQOS_5_30	1U
 /** MAC version type for MGBE IP */
-#define MAC_CORE_VER_TYPE_MGBE		2U
-/** MAC version type for EQOS version 5.40 */
-#define MAC_CORE_VER_TYPE_EQOS_5_40	3U
+#define MAC_CORE_VER_TYPE_MGBE		0U
 
 #define OSI_NULL                ((void *)0)
 /** Enable Flag */
@@ -295,9 +288,9 @@
 #define OSI_MGBE_MAC_4_20	0x42U
 
 /**
- * @brief Maximum number of VM IRQs
+ * @brief Maximum number of IRQs
  */
-#define OSI_MAX_VM_IRQS              5U
+#define OSI_MAX_VM_IRQS           4U
 
 #ifndef OSI_STRIPPED_LIB
 #define OSI_HASH_FILTER_MODE	1U
@@ -325,6 +318,10 @@ struct osi_mgbe_coe {
 	u32 vdma;
 	/** PDMA enabled for COE */
 	u32 pdma;
+};
+
+struct osi_irq_data{
+	u32 irq_id;
 };
 
 /**

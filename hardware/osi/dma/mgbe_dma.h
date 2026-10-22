@@ -105,6 +105,14 @@
 #define MGBE_RX_VDMA_TC_SHIFT			28
 #define MGBE_RX_DESC_WR_RNG_RWDC_SHIFT		16
 
+#define MGBE_DMA_CHX_STATUS_TI                 OSI_BIT(0)
+#define MGBE_DMA_CHX_STATUS_RI                 OSI_BIT(6)
+#define MGBE_DMA_CHX_STATUS_NIS                        OSI_BIT(15)
+#define MGBE_DMA_CHX_STATUS_CLEAR_TX   \
+       (MGBE_DMA_CHX_STATUS_TI | MGBE_DMA_CHX_STATUS_NIS)
+#define MGBE_DMA_CHX_STATUS_CLEAR_RX   \
+       (MGBE_DMA_CHX_STATUS_RI | MGBE_DMA_CHX_STATUS_NIS)
+
 /** @} */
 
 /**

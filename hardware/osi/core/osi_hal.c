@@ -20,13 +20,13 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include "common.h"
 #include <ivc_core.h>
 #include "core_local.h"
-#include "common.h"
 #include "core_common.h"
-#include "eqos_core.h"
 #include "mgbe_core.h"
 #include "frp.h"
+#include "pcs.h"
 #ifdef OSI_DEBUG
 #include "debug.h"
 #endif /* OSI_DEBUG */
@@ -51,21 +51,18 @@ static u64 get_systime_from_mac(void *addr, u32 mac_type)
         u64 ns1, ns2, ns = 0;
         u32 varmac_stnsr, temp1;
         u32 varmac_stsr;
-	const u32 mac_stnsr_mask[3U] = {EQOS_CORE_MAC_STNSR_TSSS_MASK,
-					     MGBE_CORE_MAC_STNSR_TSSS_MASK,
+	const u32 mac_stnsr_mask[OSI_MAX_MAC_IP_TYPES] = {MGBE_CORE_MAC_STNSR_TSSS_MASK,
 					     MGBE_CORE_MAC_STNSR_TSSS_MASK};
-	const u32 mac_stnsr[3U] = {EQOS_CORE_MAC_STNSR,
-					MGBE_CORE_MAC_STNSR, MGBE_CORE_MAC_STNSR};
-	const u32 mac_stsr[3U] = {EQOS_CORE_MAC_STSR,
-				       MGBE_CORE_MAC_STSR, MGBE_CORE_MAC_STSR};
+	const u32 mac_stnsr[OSI_MAX_MAC_IP_TYPES] = {MGBE_CORE_MAC_STNSR, MGBE_CORE_MAC_STNSR};
+	const u32 mac_stsr[OSI_MAX_MAC_IP_TYPES] = {MGBE_CORE_MAC_STSR, MGBE_CORE_MAC_STSR};
 
-        varmac_stnsr = osi_readl((u8 *)addr + mac_stnsr[mac_type]);
+        varmac_stnsr = osi_readla(NULL, (u8 *)addr + mac_stnsr[mac_type]);
         temp1 = (varmac_stnsr & mac_stnsr_mask[mac_type]);
         ns1 = (u64)temp1;
 
-        varmac_stsr = osi_readl((u8 *)addr + mac_stsr[mac_type]);
+        varmac_stsr = osi_readla(NULL, (u8 *)addr + mac_stsr[mac_type]);
 
-        varmac_stnsr = osi_readl((u8 *)addr + mac_stnsr[mac_type]);
+        varmac_stnsr = osi_readla(NULL, (u8 *)addr + mac_stnsr[mac_type]);
         temp1 = (varmac_stnsr & mac_stnsr_mask[mac_type]);
         ns2 = (u64)temp1;
 
@@ -73,7 +70,7 @@ static u64 get_systime_from_mac(void *addr, u32 mac_type)
          * happened. In that case read the updated sec counter again
          */
         if (ns1 >= ns2) {
-                varmac_stsr = osi_readl((u8 *)addr + mac_stsr[mac_type]);
+                varmac_stsr = osi_readla(NULL, (u8 *)addr + mac_stsr[mac_type]);
                 /* convert sec/high time value to nanosecond */
                 if (varmac_stsr < UINT_MAX) {
                         ns = ns2 + (varmac_stsr * OSI_NSEC_PER_SEC);
@@ -88,7 +85,7 @@ static u64 get_systime_from_mac(void *addr, u32 mac_type)
         return ns;
 }
 
-static u64 div_u64_rem(u64 dividend, u64 divisor,
+static u64 osi_div_u64_rem(u64 dividend, u64 divisor,
 		     u64 *remain)
 {
 	u64 ret = 0;
@@ -111,7 +108,7 @@ void core_get_systime_from_mac(void *addr, u32 mac, u32 *sec, u32 *nsec)
 
 	ns = get_systime_from_mac(addr, mac);
 
-	temp = div_u64_rem((u64)ns, OSI_NSEC_PER_SEC, &remain);
+	temp = osi_div_u64_rem((u64)ns, OSI_NSEC_PER_SEC, &remain);
 	if (temp < UINT_MAX) {
 		*sec = (u32)temp;
 	} else {
@@ -144,7 +141,7 @@ static inline s32 validate_args(struct osi_core_priv_data *const osi_core,
 {
 	s32 ret = 0;
 
-	if ((osi_core == OSI_NULL) || (osi_core->base == OSI_NULL) ||
+	if ((osi_core == OSI_NULL) || (osi_core->mac_base == OSI_NULL) ||
 	    (l_core->if_init_done == OSI_DISABLE) ||
 	    (l_core->magic_num != (u64)osi_core)) {
 		ret = -1;
@@ -284,7 +281,6 @@ static s32 osi_hal_init_core_ops(struct osi_core_priv_data *const osi_core)
 	typedef void (*init_core_ops_arr)(struct core_ops *local_ops);
 	static struct core_ops g_ops[OSI_MAX_MAC_IP_TYPES];
 	init_core_ops_arr i_ops[OSI_MAX_MAC_IP_TYPES][2] = {
-		{ eqos_init_core_ops, OSI_NULL },
 		{ mgbe_init_core_ops, OSI_NULL },
 		{ mgbe_init_core_ops, OSI_NULL }
 	};
@@ -293,16 +289,14 @@ static s32 osi_hal_init_core_ops(struct osi_core_priv_data *const osi_core)
 	if ((osi_core->osd_ops.udelay == OSI_NULL) ||
 	    (osi_core->osd_ops.restart_lane_bringup == OSI_NULL) ||
 	    (osi_core->osd_ops.padctrl_mii_rx_pins == OSI_NULL) ||
-#ifdef OSI_DEBUG
-	    (osi_core->osd_ops.printf == OSI_NULL) ||
-#endif /* OSI_DEBUG */
+	    (osi_core->osd_ops.dbg == OSI_NULL) ||
 	    (osi_core->osd_ops.usleep == OSI_NULL)) {
 		goto exit;
 	}
 
 	if (osi_core->mac > OSI_MAC_HW_MGBE_T26X) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid MAC HW type\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid MAC HW type:%u\n", osi_core->mac);
 		goto exit;
 	}
 
@@ -371,30 +365,16 @@ static s32 osi_hal_hw_core_deinit(struct osi_core_priv_data *const osi_core)
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	s32 ret = 0;
 
-#ifdef HSI_SUPPORT
-	if(osi_core->hsi.enabled == OSI_ENABLE) {
-		ret = l_core->ops_p->core_hsi_configure(osi_core, OSI_DISABLE);
-		if (ret == XPCS_WRITE_FAIL_CODE) {
-			osi_core->hsi.err_code[XPCS_WRITE_FAIL_IDX] = OSI_XPCS_WRITE_FAIL_ERR;
-			osi_core->hsi.report_err = OSI_ENABLE;
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "XPCS read back failed during deinit\n", 0ULL);
-			goto fail;
-		}
-	}
-#endif
 	/* Stop the MAC */
 	hw_stop_mac(osi_core);
 
 	/* Disable MAC interrupts */
-	osi_writela(osi_core, 0U, ((u8 *)osi_core->base + HW_MAC_IER));
+	osi_writela(osi_core, 0U, ((u8 *)osi_core->mac_base + HW_MAC_IER));
 
-	if (l_core->l_mac_ver != MAC_CORE_VER_TYPE_EQOS) {
-		osi_writela(osi_core, 0U, ((u8 *)osi_core->base + WRAP_COMMON_INTR_ENABLE));
-	}
+	osi_writela(osi_core, 0U, ((u8 *)osi_core->mac_base + WRAP_COMMON_INTR_ENABLE));
 
 	/* Handle the common interrupt if any status bits set */
-	l_core->ops_p->handle_common_intr(osi_core);
+	l_core->ops_p->handle_common_intr(osi_core, MAC_IRQ_SBD);
 
 	l_core->hw_init_successful = OSI_DISABLE;
 
@@ -427,12 +407,12 @@ fail:
  * - De-initialization: No
  * @returns Quotient
  */
-static inline u64 div_u64(u64 dividend,
+static inline u64 osi_div_u64(u64 dividend,
 			       u64 divisor)
 {
 	u64 remain;
 
-	return div_u64_rem(dividend, divisor, &remain);
+	return osi_div_u64_rem(dividend, divisor, &remain);
 }
 
 /**
@@ -513,22 +493,19 @@ static s32 osi_ptp_configuration(struct osi_core_priv_data *const osi_core,
 		 * so addend = (2^32 * 1000)/(ptp_ref_clk_rate in MHZ * SSINC);
 		 */
 		ssinc = OSI_PTP_SSINC_4;
-		if (osi_core->mac_ver == OSI_EQOS_MAC_5_30) {
-			ssinc = OSI_PTP_SSINC_6;
-		}
 
 		temp = ((u64)1000 << 32);
 		temp = (u64)temp * 1000000U;
 
-		temp1 = div_u64(temp,
+		temp1 = osi_div_u64(temp,
 			(u64)osi_core->ptp_config.ptp_ref_clk_rate);
-		temp2 = div_u64(temp1, (u64)ssinc);
+		temp2 = osi_div_u64(temp1, (u64)ssinc);
 
 		if (temp2 <= UINT_MAX) {
 			osi_core->default_addend = (u32)temp2;
 		} else {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "core: temp2 > UINT_MAX\n", (u64)temp2);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "core: temp2[%llu] > UINT_MAX\n", temp2);
 			ret = -1;
 			goto fail;
 		}
@@ -564,13 +541,13 @@ static s32 osi_get_mac_version(struct osi_core_priv_data *const osi_core, u32 *m
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	s32 ret = 0;
 
-	*mac_ver = osi_readla(osi_core, ((u8 *)osi_core->base + (s32)MAC_VERSION)) &
+	*mac_ver = osi_readla(osi_core, ((u8 *)osi_core->mac_base + (s32)MAC_VERSION)) &
 			      MAC_VERSION_SNVER_MASK;
 
 	if (validate_mac_ver_update_chans(osi_core->mac, *mac_ver, &l_core->num_max_chans,
 					  &l_core->l_mac_ver) == 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid MAC version\n", (u64)*mac_ver)
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid MAC version:0x%x\n", *mac_ver)
 		ret = -1;
 	}
 
@@ -580,8 +557,7 @@ static s32 osi_get_mac_version(struct osi_core_priv_data *const osi_core, u32 *m
 #ifdef HSI_SUPPORT
 static void fill_hsi_attributes(struct osi_core_priv_data *const osi_core)
 {
-	const u32 error_attr[5][2] = {
-			 {OSI_EQOS_UNCORRECTABLE_ATTR, OSI_EQOS_CORRECTABLE_ATTR},
+	const u32 error_attr[4][2] = {
 			 {OSI_MGBE0_UNCORRECTABLE_ATTR, OSI_MGBE0_CORRECTABLE_ATTR},
 			 {OSI_MGBE1_UNCORRECTABLE_ATTR, OSI_MGBE1_CORRECTABLE_ATTR},
 			 {OSI_MGBE2_UNCORRECTABLE_ATTR, OSI_MGBE2_CORRECTABLE_ATTR},
@@ -589,13 +565,8 @@ static void fill_hsi_attributes(struct osi_core_priv_data *const osi_core)
 	u32 i = 0U;
 	u32 instance = 0U;
 
-	if ((osi_core->mac == OSI_MAC_HW_MGBE) || (osi_core->mac == OSI_MAC_HW_MGBE_T26X)) {
-		/* Update MGBE instance */
-		instance = osi_core->instance_id + 1U;
-	} else {
-		/* Update EQOS instance */
-		instance = OSI_MAC_HW_EQOS;
-	}
+	/* Update MGBE instance */
+	instance = osi_core->instance_id;
 
 	/* Fill HSI error attribute values */
 	for (i = 0; i < OSI_HSI_MAX_MAC_ERROR_CODE; i++) {
@@ -617,7 +588,7 @@ static void fill_hsi_attributes(struct osi_core_priv_data *const osi_core)
 static s32 osi_hal_hw_core_init(struct osi_core_priv_data *const osi_core)
 {
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
-	const u32 ptp_ref_clk_rate[3] = {EQOS_X_PTP_CLK_SPEED, EQOS_PTP_CLK_SPEED,
+	const u32 ptp_ref_clk_rate[OSI_MAX_MAC_IP_TYPES] = {MGBE_PTP_CLK_SPEED,
 					      MGBE_PTP_CLK_SPEED};
 	s32 ret;
 
@@ -657,9 +628,6 @@ static s32 osi_hal_hw_core_init(struct osi_core_priv_data *const osi_core)
 	(void)hw_config_rxcsum_offload(osi_core, OSI_ENABLE);
 
 	osi_core->ptp_config.ptp_ref_clk_rate = ptp_ref_clk_rate[l_core->l_mac_ver];
-	if (osi_core->mac_ver == OSI_EQOS_MAC_5_40) {
-		osi_core->ptp_config.ptp_ref_clk_rate = MGBE_PTP_CLK_SPEED;
-	}
 
 	osi_core->ptp_config.ptp_filter = OSI_MAC_TCR_TSENA | OSI_MAC_TCR_TSCFUPDT |
 					  OSI_MAC_TCR_TSCTRLSSR | OSI_MAC_TCR_TSVER2ENA |
@@ -670,8 +638,8 @@ static s32 osi_hal_hw_core_init(struct osi_core_priv_data *const osi_core)
 	osi_core->ptp_config.one_nsec_accuracy = OSI_ENABLE;
 	ret = osi_ptp_configuration(osi_core, OSI_ENABLE);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Fail to configure PTP\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Fail to configure PTP\n");
 		goto fail;
 	}
 
@@ -684,8 +652,8 @@ static s32 osi_hal_hw_core_init(struct osi_core_priv_data *const osi_core)
 		if (ret == XPCS_WRITE_FAIL_CODE) {
 			osi_core->hsi.err_code[XPCS_WRITE_FAIL_IDX] = OSI_XPCS_WRITE_FAIL_ERR;
 			osi_core->hsi.report_err = OSI_ENABLE;
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "XPCS read back failed during init\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "XPCS read back failed during init\n");
 			goto fail;
 		}
 	}
@@ -711,72 +679,64 @@ static s32 conf_ptp_offload(struct osi_core_priv_data *const osi_core,
 
 	/* Validate input arguments */
 	if (pto_config == OSI_NULL) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "pto_config is NULL\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "pto_config is NULL\n");
 		return ret;
 	}
 
 	if ((pto_config->mc_uc != OSI_ENABLE) &&
 	    (pto_config->mc_uc != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid mc_uc flag value\n",
-			     (u64)pto_config->mc_uc);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid mc_uc flag value:%u\n", pto_config->mc_uc);
 		return ret;
 	}
 
 	if ((pto_config->en_dis != OSI_ENABLE) &&
 	    (pto_config->en_dis != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid enable flag value\n",
-			     (u64)pto_config->en_dis);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid enable flag value:%u\n", pto_config->en_dis);
 		return ret;
 	}
 
 	if ((pto_config->snap_type != OSI_PTP_SNAP_ORDINARY) &&
 	    (pto_config->snap_type != OSI_PTP_SNAP_TRANSPORT) &&
 	    (pto_config->snap_type != OSI_PTP_SNAP_P2P)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid SNAP type value\n",
-			     (u64)pto_config->snap_type);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid SNAP type value:%u\n", pto_config->snap_type);
 		return ret;
 	}
 
 	if ((pto_config->master != OSI_ENABLE) &&
 	    (pto_config->master != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid master flag value\n",
-			     (u64)pto_config->master);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid master flag value:%u\n", pto_config->master);
 		return ret;
 	}
 
 	if (pto_config->domain_num >= OSI_PTP_MAX_DOMAIN) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid ptp domain\n",
-			     (u64)pto_config->domain_num);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid ptp domain:%u\n", pto_config->domain_num);
 		return ret;
 	}
 
 	if (pto_config->portid >= OSI_PTP_MAX_PORTID) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid ptp port ID\n",
-			     (u64)pto_config->portid);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid ptp port ID:%u\n", pto_config->portid);
 		return ret;
 	}
 
 	ret = l_core->ops_p->config_ptp_offload(osi_core, pto_config);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Fail to configure PTO\n",
-			     (u64)pto_config->en_dis);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Fail to configure PTO offload\n");
 		return ret;
 	}
 
 	/* Configure PTP */
 	ret = osi_ptp_configuration(osi_core, pto_config->en_dis);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Fail to configure PTP\n",
-			     (u64)pto_config->en_dis);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Fail to configure PTP\n");
 		return ret;
 	}
 
@@ -824,11 +784,13 @@ static s32 osi_l2_filter(struct osi_core_priv_data *const osi_core,
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	s32 ret = 0;
 
+	OSI_CORE_INFO((osi_core->osd), 
+			"config L2 Filter: oper_mode=%d", filter->oper_mode);
+
 	ret = hw_config_mac_pkt_filter_reg(osi_core, filter);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "failed to configure MAC packet filter register\n",
-			     0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "failed to configure MAC packet filter register\n");
 		goto fail;
 	}
 
@@ -838,9 +800,8 @@ static s32 osi_l2_filter(struct osi_core_priv_data *const osi_core,
 
 		if ((filter->dma_routing == OSI_ENABLE) &&
 		    (osi_core->dcs_en != OSI_ENABLE)) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "DCS requested. Conflicts with DT config\n",
-				     0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "DCS requested. Conflicts with DT config\n");
 			goto fail;
 		}
 
@@ -849,6 +810,8 @@ static s32 osi_l2_filter(struct osi_core_priv_data *const osi_core,
 	}
 
 fail:
+	OSI_CORE_INFO((osi_core->osd),
+                        "config L2 Filter end: oper_mode=%d", filter->oper_mode);
 	return ret;
 }
 
@@ -948,8 +911,8 @@ static s32 configure_l3l4_filter_valid_params(const struct osi_core_priv_data *c
 
 	/* validate dma channel */
 	if (l3_l4->dma_chan > l_core->num_max_chans) {
-		OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_OUTOFBOUND),
-			("L3L4: Wrong DMA channel: "), (l3_l4->dma_chan));
+		OSI_CORE_ERR((osi_core->osd),
+			"L3L4: Wrong DMA channel: %u\n", l3_l4->dma_chan);
 		goto exit_func;
 	}
 
@@ -969,8 +932,8 @@ static s32 configure_l3l4_filter_valid_params(const struct osi_core_priv_data *c
 	     l3_l4->data.dst.addr_match_inv
 #endif /* !OSI_STRIPPED_LIB */
 	     ) > ((u32)OSI_L3L4_ENABLE)) {
-		OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_OUTOFBOUND),
-			("L3L4: one of the enb param > OSI_L3L4_ENABLE: "), 0);
+		OSI_CORE_ERR((osi_core->osd),
+			"L3L4: one of the enb param > OSI_L3L4_ENABLE: %u\n", l3_l4->filter_enb_dis);
 		goto exit_func;
 	}
 
@@ -980,14 +943,14 @@ static s32 configure_l3l4_filter_valid_params(const struct osi_core_priv_data *c
 		if ((l3_l4->data.src.port_match | l3_l4->data.src.addr_match |
 		     l3_l4->data.dst.port_match | l3_l4->data.dst.addr_match)
 			== OSI_L3L4_DISABLE) {
-			OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_OUTOFBOUND),
-				("L3L4: None of the enb bits are not set: "), 0);
+			OSI_CORE_ERR((osi_core->osd),
+				"L3L4: None of the enb bits are not set\n");
 			goto exit_func;
 		}
 		if ((l3_l4->data.is_ipv6 & l3_l4->data.src.addr_match &
 			l3_l4->data.dst.addr_match) != OSI_L3L4_DISABLE) {
-			OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_OUTOFBOUND),
-				("L3L4: Both ip6 addr match bits are set\n"), 0);
+			OSI_CORE_ERR((osi_core->osd),
+					"L3L4: Both ip6 addr match bits are set\n");
 			goto exit_func;
 		}
 	}
@@ -1027,13 +990,13 @@ static s32 configure_l3l4_filter_helper(struct osi_core_priv_data *const osi_cor
 {
 	struct osi_l3_l4_filter *cfg_l3_l4;
 	struct core_local *const l_core = (struct core_local *)(void *)osi_core;
-	const u32 filter_mask[OSI_MAX_MAC_IP_TYPES] = { 0x1F, 0x1F, 0x3F };
+	const u32 filter_mask[OSI_MAX_MAC_IP_TYPES] = { 0x1F, 0x3F };
 	s32 ret;
 
 	ret = l_core->ops_p->config_l3l4_filters(osi_core, filter_no, l3_l4);
 	if (ret < 0) {
-		OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_HW_FAIL),
-			("Failed to config L3L4 filters: "), (filter_no));
+		OSI_CORE_ERR((osi_core->osd),
+			"Failed to config L3L4 filters: %u\n", filter_no);
 		goto exit_func;
 	}
 
@@ -1044,8 +1007,8 @@ static s32 configure_l3l4_filter_helper(struct osi_core_priv_data *const osi_cor
 		 * ignoring return value.
 		 */
 		(void)osi_memcpy(cfg_l3_l4, l3_l4, sizeof(struct osi_l3_l4_filter));
-		OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_OUTOFBOUND),
-			("L3L4: ADD: "), (filter_no));
+		OSI_CORE_INFO((osi_core->osd),
+			"L3L4: ADD: filter_no=%u\n", filter_no);
 
 #if !defined(L3L4_WILDCARD_FILTER)
 		/* update filter mask bit */
@@ -1058,8 +1021,10 @@ static s32 configure_l3l4_filter_helper(struct osi_core_priv_data *const osi_cor
 		 * ignoring return value.
 		 */
 		(void)osi_memset(cfg_l3_l4, 0, sizeof(struct osi_l3_l4_filter));
-		OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_OUTOFBOUND),
-			("L3L4: DELETE: "), (filter_no));
+		OSI_CORE_INFO((osi_core->osd),
+			"L3L4: DELETE: filter_no=%u\n", filter_no);
+
+
 
 #if !defined(L3L4_WILDCARD_FILTER)
 		/* update filter mask bit */
@@ -1128,16 +1093,15 @@ static void l3l4_add_wildcard_filter(struct osi_core_priv_data *const osi_core,
 		err = configure_l3l4_filter_helper(osi_core, 0, l3l4_filter);
 		if (err < 0) {
 			/* wildcard config failed */
-			OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_INVALID),
-				("L3L4: TCP wildcard config failed: "), (0UL));
+			OSI_CORE_ERR((osi_core->osd), ("L3L4: TCP wildcard config failed: "), (0UL));
 		}
 	}
 
 	if (err >= 0) {
 		/* wildcard config success */
 		l_core->l3l4_wildcard_filter_configured = OSI_ENABLE;
-		OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_INVALID),
-			("L3L4: Wildcard config success"), (0UL));
+		OSI_CORE_INFO((osi_core->osd),
+			("L3L4: Wildcard config success"));
 	}
 }
 #endif /* L3L4_WILDCARD_FILTER */
@@ -1175,7 +1139,6 @@ static s32 configure_l3l4_filter(struct osi_core_priv_data *const osi_core,
 	u32 free_filter_no = UINT_MAX;
 	const struct core_local *l_core = (struct core_local *)(void *)osi_core;
 	const u32 max_filter_no[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAX_L3_L4_FILTER - 1U,
 		OSI_MGBE_MAX_L3_L4_FILTER - 1U,
 		OSI_MGBE_MAX_L3_L4_FILTER_T264 - 1U,
 	};
@@ -1193,24 +1156,24 @@ static s32 configure_l3l4_filter(struct osi_core_priv_data *const osi_core,
 	if (l3_l4->filter_enb_dis == OSI_L3L4_ENABLE) {
 		if (err == 0) {
 			/* duplicate filter request */
-			OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_HW_FAIL),
-				("L3L4: Failed: duplicate filter: "), (filter_no));
+			OSI_CORE_ERR((osi_core->osd),
+					"L3L4: Failed: duplicate filter: %u\n", filter_no);
 			goto exit_func;
 		}
 
 		/* check free index */
 		if (free_filter_no > max_filter_no[osi_core->mac]) {
 			/* no free entry found */
-			OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_HW_FAIL),
-				("L3L4: Failed: no free filter: "), (free_filter_no));
+			OSI_CORE_INFO((osi_core->osd),
+					"L3L4: Failed: no free filter: free_filter_no=%u\n", free_filter_no);
 			goto exit_func;
 		}
 		filter_no = free_filter_no;
 	} else {
 		if (err < 0) {
 			/* no match found */
-			OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_HW_FAIL),
-				("L3L4: delete: no filter match: "), (filter_no));
+			OSI_CORE_INFO((osi_core->osd),
+					"L3L4: delete: no filter match: filter_no=%u\n", filter_no);
 			/* filter already deleted, return success */
 			ret = 0;
 			goto exit_func;
@@ -1221,8 +1184,8 @@ static s32 configure_l3l4_filter(struct osi_core_priv_data *const osi_core,
 	/* setup l3l4 wildcard filter for l3l4 */
 	l3l4_add_wildcard_filter(osi_core, max_filter_no[osi_core->mac]);
 	if (l_core->l3l4_wildcard_filter_configured != OSI_ENABLE) {
-		OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_HW_FAIL),
-			("L3L4: Rejected: wildcard is not enabled: "), (filter_no));
+		OSI_CORE_ERR((osi_core->osd),
+				"L3L4: Rejected: wildcard is not enabled: %u\n", filter_no);
 		goto exit_func;
 	}
 #endif /* L3L4_WILDCARD_FILTER */
@@ -1231,8 +1194,8 @@ static s32 configure_l3l4_filter(struct osi_core_priv_data *const osi_core,
 	err = configure_l3l4_filter_helper(osi_core, filter_no, l3_l4);
 	if (err < 0) {
 		/* filter config failed */
-		OSI_CORE_ERR((osi_core->osd), (OSI_LOG_ARG_HW_FAIL),
-			("L3L4: configure_l3l4_filter_helper() failed"), (filter_no));
+		OSI_CORE_ERR((osi_core->osd),
+				"L3L4: configure_l3l4_filter_helper() failed: %u\n", filter_no);
 		goto exit_func;
 	}
 
@@ -1288,8 +1251,8 @@ static s32 osi_adjust_freq(struct osi_core_priv_data *const osi_core, s32 ppb)
 	s32 ppb1 = ppb;
 
 	if ((ppb > MAX_FREQ_POS) || (ppb < MAX_FREQ_NEG)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "PPB > MAX_FREQ_POS or < MAX_FREQ_NEG\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "PPB[%ld] > MAX_FREQ_POS or < MAX_FREQ_NEG\n",
                              (s64)ppb);
 		goto fail;
 	}
@@ -1307,11 +1270,11 @@ static s32 osi_adjust_freq(struct osi_core_priv_data *const osi_core, s32 ppb)
 	 * div_u64 will divide the "adj" by "1000000000ULL"
 	 * and return the quotient.
 	 */
-	temp = div_u64(adj, OSI_NSEC_PER_SEC);
+	temp = osi_div_u64(adj, OSI_NSEC_PER_SEC);
 	if (temp < UINT_MAX) {
 		diff = (u32)temp;
 	} else {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID, "temp > UINT_MAX\n",
+		OSI_CORE_ERR(osi_core->osd,  "temp[%lld] > UINT_MAX\n",
 			     (s64)temp);
 		goto fail;
 	}
@@ -1320,8 +1283,8 @@ static s32 osi_adjust_freq(struct osi_core_priv_data *const osi_core, s32 ppb)
 		if (addend <= (UINT_MAX - diff)) {
 			addend = (addend + diff);
 		} else {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "addend > UINT_MAX\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "addend[%u] > UINT_MAX\n", addend);
 			goto fail;
 		}
 	} else {
@@ -1330,8 +1293,8 @@ static s32 osi_adjust_freq(struct osi_core_priv_data *const osi_core, s32 ppb)
 		} else if (addend < diff) {
 			addend = diff - addend;
 		} else {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "addend = diff\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "addend = diff\n");
 		}
 	}
 
@@ -1363,38 +1326,38 @@ static s32 osi_adjust_time(struct osi_core_priv_data *const osi_core,
 		udelta = (u64)nsec_delta1;
 	}
 
-	quotient = div_u64_rem(udelta, OSI_NSEC_PER_SEC, &reminder);
+	quotient = osi_div_u64_rem(udelta, OSI_NSEC_PER_SEC, &reminder);
 	if (quotient <= UINT_MAX) {
 		sec = (u32)quotient;
 	} else {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "quotient > UINT_MAX\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "quotient > UINT_MAX\n");
 		goto fail;
 	}
 
 	if (reminder <= UINT_MAX) {
 		nsec = (u32)reminder;
 	} else {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "reminder > UINT_MAX\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "reminder > UINT_MAX\n");
 		goto fail;
 	}
 
-	core_get_systime_from_mac(osi_core->base, osi_core->mac, &cur_sec, &cur_nsec);
+	core_get_systime_from_mac(osi_core->mac_base, osi_core->mac, &cur_sec, &cur_nsec);
 	calculate = ((s64)cur_sec * OSI_NSEC_PER_SEC_SIGNED) + (s64)cur_nsec;
 
 	if (neg_adj == 1U) {
 		if ((calculate + nsec_delta) < 0LL) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "Wrong delta, put time in -ve\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Wrong delta, put time in -ve\n");
 			ret = -1;
 			goto fail;
 		}
 	} else {
 		/* Addition of 2 sec for compensate Max nanosec factors*/
 		if (cur_sec > (UINT_MAX - sec - 2U)) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "Not Supported sec beyond UINT_max\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Not Supported sec beyond UINT_max\n");
 			ret = -1;
 			goto fail;
 		}
@@ -1427,8 +1390,8 @@ static s32 rxq_route_config(struct osi_core_priv_data *const osi_core,
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 
 	if (rxq_route->route_type != OSI_RXQ_ROUTE_PTP) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid route_type\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid route_type: %u\n",
 			     rxq_route->route_type);
 		return -1;
 	}
@@ -1476,17 +1439,11 @@ static s32 vlan_id_update(struct osi_core_priv_data *const osi_core,
 	u32 action = vid & VLAN_ACTION_MASK;
 	u16 vlan_id = (u16)(vid & VLAN_VID_MASK);
 
-	if ((osi_core->mac_ver == OSI_EQOS_MAC_4_10) ||
-	    (osi_core->mac_ver == OSI_EQOS_MAC_5_00)) {
-		/* No VLAN ID filtering */
-		return 0;
-	}
-
 	if (((action != OSI_VLAN_ACTION_ADD) &&
 	    (action != OSI_VLAN_ACTION_DEL)) ||
 	    (vlan_id >= VLAN_NUM_VID)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: Invalid action/vlan_id\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: Invalid action:%u vlan_id: %u\n", action, vlan_id);
 		/* Unsupported action */
 		return -1;
 	}
@@ -1536,9 +1493,8 @@ static s32 conf_eee(struct osi_core_priv_data *const osi_core,
 	if ((tx_lpi_timer >= OSI_MAX_TX_LPI_TIMER) ||
 	    (tx_lpi_timer <= OSI_MIN_TX_LPI_TIMER) ||
 	    ((tx_lpi_timer % OSI_MIN_TX_LPI_TIMER) != OSI_NONE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid Tx LPI timer value\n",
-			     (u64)tx_lpi_timer);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid Tx LPI timer value: %u\n", tx_lpi_timer);
 		return -1;
 	}
 
@@ -1588,14 +1544,14 @@ static s32 conf_arp_offload(struct osi_core_priv_data *const osi_core,
 	struct core_local *l_core = (struct core_local *)(void *)osi_core;
 
 	if (ip_addr == OSI_NULL) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: ip_addr is NULL\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: ip_addr is NULL\n");
 		return -1;
 	}
 
 	if ((flags != OSI_ENABLE) && (flags != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid ARP offload enable/disable flag\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid ARP offload enable/disable flag: %u\n", flags);
 		return -1;
 	}
 
@@ -1640,8 +1596,8 @@ static s32 conf_mac_loopback(struct osi_core_priv_data *const osi_core,
 
 	/* don't allow only if loopback mode is other than 0 or 1 */
 	if ((lb_mode != OSI_ENABLE) && (lb_mode != OSI_DISABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid loopback mode\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid loopback mode: %u\n", lb_mode);
 		return -1;
 	}
 
@@ -1733,9 +1689,8 @@ static s32 config_est(struct osi_core_priv_data *osi_core,
 
 	if ((osi_core->flow_ctrl & OSI_FLOW_CTRL_TX) ==
 	     OSI_FLOW_CTRL_TX) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "TX Flow control enabled, please disable it",
-			      0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "TX Flow control enabled, please disable it");
 		ret = -1;
 		goto fail;
 	}
@@ -1876,7 +1831,7 @@ static inline s32 get_tx_ts(struct osi_core_priv_data *osi_core,
 	u64 temp_val = 0ULL;
 	u64 ts_val = 0ULL;
 
-	core_get_systime_from_mac(osi_core->base, osi_core->mac, &sec, &nsec);
+	core_get_systime_from_mac(osi_core->mac_base, osi_core->mac, &sec, &nsec);
 	ts_val = (sec * OSI_NSEC_PER_SEC) + nsec;
 
 	if (__sync_fetch_and_add(&l_core->ts_lock, 1) == 1U) {
@@ -1901,9 +1856,9 @@ static inline s32 get_tx_ts(struct osi_core_priv_data *osi_core,
 			temp->prev->next =  temp->next;
 			/* Clear in_use fields */
 			temp->in_use = OSI_DISABLE;
-			OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_INVALID),
-				      ("Removing stale TS from queue pkt_id\n"),
-				      ((u64)temp->pkt_id));
+			OSI_CORE_INFO((osi_core->osd),
+				      "Removing stale TS from queue pkt_id=%llx\n",
+				      (u64)temp->pkt_id);
 			count++;
 			temp = temp->next;
 			continue;
@@ -1970,8 +1925,8 @@ static inline s64 drift_calculation(struct osi_core_priv_data *const osi_core,
 
 	ret = hw_ptp_tsc_capture(osi_core, &ptp_tsc1);
 	if (ret != 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: TSC PTP capture failed for primary\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: TSC PTP capture failed for primary\n");
 #ifdef HSI_SUPPORT
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_TSC_READ_ERR;
@@ -1981,8 +1936,8 @@ static inline s64 drift_calculation(struct osi_core_priv_data *const osi_core,
 
 	ret = hw_ptp_tsc_capture(sec_osi_core, &ptp_tsc2);
 	if (ret != 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: TSC PTP capture failed for secondary\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: TSC PTP capture failed for secondary\n");
 #ifdef HSI_SUPPORT
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_TSC_READ_ERR;
@@ -2008,8 +1963,8 @@ static inline s64 drift_calculation(struct osi_core_priv_data *const osi_core,
 		if ((OSI_LLONG_MAX - (s64)temp) > *secondary_time) {
 			*secondary_time -= (s64)temp;
 		} else {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "CORE: sec time crossing limit\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "CORE: sec time crossing limit\n");
 #ifdef HSI_SUPPORT
 			osi_core->hsi.report_err = OSI_ENABLE;
 			osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_TIME_CAL_ERR;
@@ -2022,8 +1977,8 @@ static inline s64 drift_calculation(struct osi_core_priv_data *const osi_core,
 		if ((OSI_LLONG_MAX - (s64)temp) > *secondary_time) {
 			*secondary_time += (s64)temp;
 		} else {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				     "CORE: sec time crossing limit\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "CORE: sec time crossing limit\n");
 #ifdef HSI_SUPPORT
 			osi_core->hsi.report_err = OSI_ENABLE;
 			osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_TIME_CAL_ERR;
@@ -2038,8 +1993,8 @@ static inline s64 drift_calculation(struct osi_core_priv_data *const osi_core,
 	if ((*primary_time >= 0) && (*secondary_time >= 0)) {
 		val = (*primary_time - *secondary_time);
 	} else {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: negative time\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: negative time\n");
 #ifdef HSI_SUPPORT
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_TIME_CAL_ERR;
@@ -2290,7 +2245,6 @@ static void cfg_l3_l4_filter(struct core_local *l_core)
 {
 	u32 i = 0U;
 	const u32 max_filter_no[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_MAX_L3_L4_FILTER,
 		OSI_MGBE_MAX_L3_L4_FILTER,
 		OSI_MGBE_MAX_L3_L4_FILTER_T264,
 	};
@@ -2321,7 +2275,7 @@ static void cfg_l2_filter(struct core_local *l_core)
 	(void)osi_l2_filter((struct osi_core_priv_data *)(void *)l_core,
 			    &l_core->cfg.l2_filter);
 
-	for (i = 0U; i < EQOS_MAX_MAC_ADDRESS_FILTER; i++) {
+	for (i = 0U; i < OSI_MGBE_MAX_MAC_ADDRESS_FILTER; i++) {
 		if (l_core->cfg.l2[i].used == OSI_DISABLE) {
 			continue;
 		}
@@ -2531,8 +2485,8 @@ static s32 handle_set_systohw_time_ioctl(struct osi_core_priv_data *osi_core,
 
 	ret = hw_set_systime_to_mac(osi_core, data->arg1_u32, data->arg2_u32);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"CORE: set systohw time failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"CORE: set systohw time failed\n");
 #ifdef HSI_SUPPORT
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_SET_TIME_ERR;
@@ -2553,7 +2507,7 @@ static s32 handle_set_systohw_time_ioctl(struct osi_core_priv_data *osi_core,
 		} else {
 			if (l_core->ether_m2m_role == OSI_PTP_M2M_PRIMARY) {
 				osi_lock_irq_enabled(&secondary_osi_lcore->serv.m2m_lock);
-				core_get_systime_from_mac(osi_core->base,
+				core_get_systime_from_mac(osi_core->mac_base,
 							  osi_core->mac, &sec, &nsec);
 				osi_unlock_irq_enabled(&secondary_osi_lcore->serv.m2m_lock);
 				ret = hw_set_systime_to_mac(sec_osi_core, sec, nsec);
@@ -2565,9 +2519,8 @@ static s32 handle_set_systohw_time_ioctl(struct osi_core_priv_data *osi_core,
 				}
 			}
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-						"CORE: set_time for sec_controller failed\n",
-						0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+						"CORE: set_time for sec_controller failed\n");
 #ifdef HSI_SUPPORT
 				osi_core->hsi.report_err = OSI_ENABLE;
 				osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_SET_TIME_ERR;
@@ -2597,8 +2550,8 @@ static s32 handle_config_ptp_ioctl(struct osi_core_priv_data *osi_core,
 	}
 
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: configure_ptp failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: configure_ptp failed\n");
 #ifdef HSI_SUPPORT
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_CONFIG_PTP_ERR;
@@ -2665,9 +2618,8 @@ static s32 handle_time_ether_m2m_role(struct osi_core_priv_data *osi_core)
 		}
 
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-					"CORE: adjust_time for sec_controller failed\n",
-					0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+					"CORE: adjust_time for sec_controller failed\n");
 #ifdef HSI_SUPPORT
 			osi_core->hsi.report_err = OSI_ENABLE;
 			osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_ADJ_TIME_ERR;
@@ -2688,8 +2640,8 @@ static s32 handle_adjust_time_ioctl(struct osi_core_priv_data *osi_core,
 	ret = osi_adjust_time(osi_core, data->arg8_64);
 
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: adjust_time failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: adjust_time failed\n");
 #ifdef HSI_SUPPORT
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_ADJ_TIME_ERR;
@@ -2744,9 +2696,8 @@ static s32 handle_freq_ether_m2m_role(struct osi_core_priv_data *osi_core)
 					/* call adjust time as JUMP happened */
 					ret = osi_adjust_time(sec_osi_core, drift_value);
 					if (ret < 0) {
-						OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-							     "CORE: adjust_time failed\n",
-							     0ULL);
+						OSI_CORE_ERR(osi_core->osd, 
+							     "CORE: adjust_time failed\n");
 #ifdef HSI_SUPPORT
 						osi_core->hsi.report_err = OSI_ENABLE;
 						osi_core->hsi.err_code[MAC2MAC_ERR_IDX] =
@@ -2762,9 +2713,8 @@ static s32 handle_freq_ether_m2m_role(struct osi_core_priv_data *osi_core)
 		}
 
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-					"CORE: adjust_freq for sec_controller failed\n",
-					0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+					"CORE: adjust_freq for sec_controller failed\n");
 #ifdef HSI_SUPPORT
 			osi_core->hsi.report_err = OSI_ENABLE;
 			osi_core->hsi.err_code[MAC2MAC_ERR_IDX] = OSI_M2M_ADJ_FREQ_ERR;
@@ -2784,8 +2734,8 @@ static s32 handle_adjust_freq_ioctl(struct osi_core_priv_data *osi_core,
 
 	ret = osi_adjust_freq(osi_core, data->arg6_32);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"CORE: adjust freq failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+				"CORE: adjust freq failed\n");
 #ifdef HSI_SUPPORT
 		osi_core->hsi.report_err = OSI_ENABLE;
 		osi_core->hsi.err_code[MAC2MAC_ERR_IDX] =
@@ -2829,6 +2779,85 @@ static s32 handle_set_avb_ioctl(struct osi_core_priv_data *osi_core,
 	}
 exit:
 	return ret;
+}
+
+static void xpcs_handle_common_intr(struct osi_core_priv_data *const osi_core, u32 irq_id)
+{
+    switch(irq_id){
+		case MAC_IRQ_XPCS_SBD:
+			xpcs_sbd_intr_handle(osi_core->pcs_dev);
+			break;
+		case MAC_IRQ_XPCS_UE:
+            xpcs_ue_intr_handle(osi_core->pcs_dev);
+			break;
+		case MAC_IRQ_XPCS_CE:
+			xpcs_ce_intr_handle(osi_core->pcs_dev);
+			break;
+        default:
+			break;
+	}
+}
+
+static void xlgpcs_handle_common_intr(struct osi_core_priv_data *const osi_core, u32 irq_id)
+{
+    switch(irq_id){
+		case MAC_IRQ_XLGPCS_SBD:
+			xlgpcs_sbd_intr_handle(osi_core->pcs_dev);
+			break;
+		case MAC_IRQ_XLGPCS_UE:
+            xlgpcs_ue_intr_handle(osi_core->pcs_dev);
+			break;
+		case MAC_IRQ_XLGPCS_CE:
+			xlgpcs_ce_intr_handle(osi_core->pcs_dev);
+			break;
+        default:
+			break;
+	}
+}
+
+static void macsec_handle_common_intr(struct osi_core_priv_data *const osi_core, u32 irq_id)
+{
+	dev_err(osi_core->dev, "%s handle %s interrupt\n", osi_core->if_name, osi_get_irq_name(irq_id));
+}
+
+/**
+ * @brief osi_handle_common_intr - Handles common interrupt.
+ *
+ * @note
+ * Algorithm: Clear common interrupt source.
+ *
+ * @param[in] osi_core: OSI core private data structure.
+ *
+ * @note MAC should be init and started. see osi_start_mac()
+ */
+static void osi_handle_common_intr(struct osi_core_priv_data *const osi_core, struct osi_irq_data  *irq_data)
+{
+	struct core_local *l_core = (struct core_local *)(void *)osi_core;
+
+	switch(irq_data->irq_id){
+		case MAC_IRQ_LPI:
+		case MAC_IRQ_SBD:
+		case MAC_IRQ_UE:
+		case MAC_IRQ_RE:
+		    l_core->ops_p->handle_common_intr(osi_core, irq_data->irq_id);
+			break;
+		case MAC_IRQ_XPCS_SBD:
+		case MAC_IRQ_XPCS_UE:
+		case MAC_IRQ_XPCS_CE:
+		    xpcs_handle_common_intr(osi_core, irq_data->irq_id);
+			break;
+		case MAC_IRQ_XLGPCS_SBD:
+		case MAC_IRQ_XLGPCS_UE:
+		case MAC_IRQ_XLGPCS_CE:
+		    xlgpcs_handle_common_intr(osi_core, irq_data->irq_id);
+			break;
+		case MAC_IRQ_MACSEC:
+		case MAC_IRQ_MACSEC_AES:
+		case MAC_IRQ_MACSEC_ALARM:
+		    macsec_handle_common_intr(osi_core, irq_data->irq_id);
+		    break;
+	}
+	return;
 }
 
 #ifdef OSI_RM_FTRACE
@@ -3085,10 +3114,9 @@ static s32 osi_hal_handle_ioctl(struct osi_core_priv_data *osi_core,
 		ret = hw_set_mode(osi_core, ioctl_data->arg6_32);
 		break;
 	case OSI_CMD_GET_RSS:
-#ifdef OSI_RM_FTRACE
-		ethernet_server_cmd_log("OSI_CMD_GET_RSS");
-#endif
-		ret = ops_p->get_rss(osi_core, &ioctl_data->data.rss);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "OSI_CMD_GET_RSS cannot support!\n");
+		ret = -1;
 		break;
 #endif /* !OSI_STRIPPED_LIB */
 
@@ -3110,7 +3138,7 @@ static s32 osi_hal_handle_ioctl(struct osi_core_priv_data *osi_core,
 #ifdef OSI_RM_FTRACE
 		ethernet_server_cmd_log("OSI_CMD_COMMON_ISR");
 #endif
-		ops_p->handle_common_intr(osi_core);
+		osi_handle_common_intr(osi_core, &ioctl_data->data.irq_data);
 		ret = 0;
 		break;
 
@@ -3204,7 +3232,9 @@ static s32 osi_hal_handle_ioctl(struct osi_core_priv_data *osi_core,
 		break;
 
 	case OSI_CMD_CONFIG_RSS:
-		ret = ops_p->config_rss(osi_core, &ioctl_data->data.rss);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "OSI_CMD_CONFIG_RSS cannot support!\n");
+		ret = -1;
 		break;
 
 #endif /* !OSI_STRIPPED_LIB */
@@ -3298,6 +3328,7 @@ static s32 osi_hal_handle_ioctl(struct osi_core_priv_data *osi_core,
 			ethernet_server_cmd_log("OSI_CMD_CAP_TSC_PTP");
 		}
 #endif
+		//timestamp snapshot
 		ret = hw_ptp_tsc_capture(osi_core, &ioctl_data->data.ptp_tsc);
 		break;
 
@@ -3366,13 +3397,13 @@ static s32 osi_hal_handle_ioctl(struct osi_core_priv_data *osi_core,
 		ethernet_server_cmd_log("OSI_CMD_GMSL_COE_CONFIG");
 #endif
 		ret = ops_p->config_coe_buf(osi_core, ioctl_data->data.mgbe_coe);
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: OSI_CMD_GMSL_COE_CONFIG ret: \n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: OSI_CMD_GMSL_COE_CONFIG ret: %llu\n",
 			     (u64)ret);
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: Incorrect command\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: Incorrect command: %u\n",
 			     (u64)ioctl_data->cmd);
 		break;
 	}

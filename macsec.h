@@ -46,9 +46,9 @@
 
 #define OB_MACSEC_GENL_VERSION	1
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 #define MACSEC_SIZE 0x10000U
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 
 #define KEY2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5],\
 		   (a)[6], (a)[7], (a)[8], (a)[9], (a)[10], (a)[11],\
@@ -73,9 +73,12 @@ enum ob_macsec_sa_attrs {
 	OB_MACSEC_SA_ATTR_LOWEST_PN,
 	OB_MACSEC_SA_ATTR_CONF_OFFSET,
 	OB_MACSEC_SA_ATTR_ENCRYPT,
-#ifndef OBPKCS_MACSEC
+#ifdef OBPKCS_MACSEC
+	OB_MACSEC_SA_PKCS_KEY_WRAP,
+	OB_MACSEC_SA_PKCS_KEK_HANDLE,
+#else
 	OB_MACSEC_SA_ATTR_KEY,
-#endif /* !OBPKCS_MACSEC */
+#endif /* OBPKCS_MACSEC */
 	__OB_MACSEC_SA_ATTR_END,
 	NUM_OB_MACSEC_SA_ATTR = __OB_MACSEC_SA_ATTR_END,
 	OB_MACSEC_SA_ATTR_MAX = __OB_MACSEC_SA_ATTR_END - 1,
@@ -134,7 +137,11 @@ static const struct nla_policy ob_macsec_sa_genl_policy[NUM_OB_MACSEC_SA_ATTR] =
 	[OB_MACSEC_SA_ATTR_LOWEST_PN] = { .type = NLA_U32 },
 	[OB_MACSEC_SA_ATTR_CONF_OFFSET] = { .type = NLA_U8 },
 	[OB_MACSEC_SA_ATTR_ENCRYPT] = { .type = NLA_U8 },
-#ifndef OBPKCS_MACSEC
+#ifdef OBPKCS_MACSEC
+	[OB_MACSEC_SA_PKCS_KEY_WRAP] = { .type = NLA_BINARY,
+					 .len = OB_SAK_WRAPPED_LEN,},
+	[OB_MACSEC_SA_PKCS_KEK_HANDLE] = { .type = NLA_U64 },
+#else
 	[OB_MACSEC_SA_ATTR_KEY] = { .type = NLA_BINARY,
 				    .len = OSI_KEY_LEN_256,},
 #endif /* OBPKCS_MACSEC */
@@ -272,10 +279,8 @@ struct macsec_priv_data {
 	unsigned int macsec_rx_an_map;
 	/** Macsec COE instance */
 	struct macsec_coe coe;
-#ifdef CONFIG_MACSEC
 	/** MACsec frame validation mode */
 	unsigned int validate_frames;
-#endif /* CONFIG_MACSEC */
 };
 
 int macsec_probe(struct ether_priv_data *pdata);

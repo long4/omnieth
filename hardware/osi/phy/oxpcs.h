@@ -158,8 +158,8 @@ static inline s32 nv_xpcs_write_safety(struct osi_core_priv_data *osi_core,
 
 #ifndef OSI_STRIPPED_LIB
 	if (ret != 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"xpcs_write_safety failed", reg_addr);
+		OSI_CORE_ERR(osi_core->osd, 
+				"xpcs_write_safety failed: 0x%lx", reg_addr);
 	}
 #endif /* !OSI_STRIPPED_LIB */
 	return ret;

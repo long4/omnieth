@@ -24,8 +24,10 @@
 #ifndef INCLUDED_COMMON_H
 #define INCLUDED_COMMON_H
 
+#include <linux/printk.h>
 #include <oeth_type.h>
 #include <osi_common.h>
+#include <osi_core.h>
 
 struct osi_core_priv_data;
 
@@ -109,45 +111,6 @@ static inline void osi_unlock_irq_enabled(u32 *lock)
 }
 
 /**
- * @brief osi_readl - Read a memory mapped register.
- *
- * @param[in] addr: Memory mapped address.
- *
- * @pre Physical address has to be memory mapped.
- *
- * @return Data from memory mapped register - success.
- *
- * @note
- * API Group:
- * - Initialization: Yes
- * - Run time: Yes
- * - De-initialization: Yes
- */
-static inline u32 osi_readl(void *addr)
-{
-	return *(volatile u32 *)addr;
-}
-
-/**
- * @brief osi_writel - Write to a memory mapped register.
- *
- * @param[in] val:  Value to be written.
- * @param[in] addr: Memory mapped address.
- *
- * @pre Physical address has to be memory mapped.
- *
- * @note
- * API Group:
- * - Initialization: Yes
- * - Run time: Yes
- * - De-initialization: Yes
- */
-static inline void osi_writel(u32 val, void *addr)
-{
-	*(volatile u32 *)addr = val;
-}
-
-/**
  * @brief osi_readla - Read a memory mapped register.
  *
  * @ note
@@ -162,10 +125,16 @@ static inline void osi_writel(u32 val, void *addr)
  *
  * @return Data from memory mapped register - success.
  */
-static inline u32 osi_readla(OSI_UNUSED void *priv, void *addr)
+static inline u32 osi_readla(void *priv, void *addr)
 {
-	(void)priv; // unused
-	return *(volatile u32 *)addr;
+#ifdef DBG_OSI
+    struct osi_core_priv_data *osi_core = (struct osi_core_priv_data *)priv;
+    u32 ret = *(volatile u32 *)addr;
+    OSI_CORE_DEBUG("[MGBE] osi_readla from addr:0x%llx value:0x%x\n", (u64)addr-(u64)osi_core->mac_base, ret);
+    return ret;	
+#else
+    return *(volatile u32 *)addr;
+#endif
 }
 
 /**
@@ -182,10 +151,13 @@ static inline u32 osi_readla(OSI_UNUSED void *priv, void *addr)
  *
  * @note Physical address has to be memmory mapped.
  */
-static inline void osi_writela(OSI_UNUSED void *priv, u32 val, void *addr)
+static inline void osi_writela(void *priv, u32 val, void *addr)
 {
-	(void)priv; // unused
-	*(volatile u32 *)addr = val;
+#ifdef DBG_OSI
+    struct osi_core_priv_data *osi_core = (struct osi_core_priv_data *)priv;
+    OSI_CORE_DEBUG("[MGBE] osi_writela 0x%x to addr: 0x%llx\n", val, (u64)addr-(u64)osi_core->mac_base);
+#endif
+    *(volatile u32 *)addr = val;
 }
 
 /**
@@ -213,42 +185,12 @@ static inline s32 validate_mac_ver_update_chans(u32 mac,
 						    u32 *l_mac_ver)
 {
 	const u32 max_dma_chan[OSI_MAX_MAC_IP_TYPES] = {
-		OSI_EQOS_MAX_NUM_CHANS,
-		OSI_MGBE_T23X_MAX_NUM_CHANS,
-		OSI_MGBE_MAX_NUM_CHANS
-	};
+		OSI_MGBE_OB01_MAX_NUM_CHANS,
+		OSI_MGBE_MAX_NUM_CHANS};
 	s32 ret;
-
-	switch (mac_ver) {
-#ifndef OSI_STRIPPED_LIB
-	case OSI_EQOS_MAC_5_00:
-		*num_max_chans = OSI_EQOS_XP_MAX_CHANS;
-		*l_mac_ver = MAC_CORE_VER_TYPE_EQOS;
-		ret = 1;
-		break;
-#endif /* !OSI_STRIPPED_LIB */
-	case OSI_EQOS_MAC_5_30:
-	case OSI_EQOS_MAC_5_40:
-		*num_max_chans = OSI_EQOS_MAX_NUM_CHANS;
-		*l_mac_ver = MAC_CORE_VER_TYPE_EQOS_5_30;
-		ret = 1;
-		break;
-	case OSI_MGBE_MAC_3_10:
-	//TBD: T264 uFPGA reports mac version 3.2
-	case OSI_MGBE_MAC_3_20:
-	case OSI_MGBE_MAC_4_20:
-#ifndef OSI_STRIPPED_LIB
-	case OSI_MGBE_MAC_4_00:
-#endif /* !OSI_STRIPPED_LIB */
-		//TBD: T264 number of dma channels?
-		*num_max_chans = max_dma_chan[mac];
-		*l_mac_ver = MAC_CORE_VER_TYPE_MGBE;
-		ret = 1;
-		break;
-	default:
-		ret = 0;
-		break;
-	}
+	*num_max_chans = max_dma_chan[mac];
+	*l_mac_ver = MAC_CORE_VER_TYPE_MGBE;
+	ret = 1;
 
 	return ret;
 }

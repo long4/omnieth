@@ -18,11 +18,15 @@ endif
 ccflags-y += -DLINUX_OS -DOBPKCS_MACSEC -mno-outline-atomics -Werror \
 	     -I$(src)/hardware/include \
 
-ccflags-y += -Wframe-larger-than=8192
+ccflags-y += -Wframe-larger-than=4096
 
 #ccflags-y += -DOSI_DEBUG -DMACSEC_SUPPORT -DDEBUG_MACSEC -DMACSEC_KEY_PROGRAM
 ccflags-y += -DMACSEC_SUPPORT
 ccflags-y += -DBW_TEST
+#ccflags-y += -DDBG_OSI
+ccflags-y += -DINFO_OSI
+#ccflags-y += -DDBG_OSI
+ccflags-y += -DINFO_OSD
 
 omnieth-y:= ether_linux.o \
 		  osd.o \
@@ -34,31 +38,33 @@ omnieth-y:= ether_linux.o \
 		  macsec.o \
 		  selftests.o \
 		  ether_test_tx.o \
+		  $(OSI_MACSEC)/dwc_macsec.o \
+		  $(OSI_MACSEC)/macsec_debugfs.o \
+		  $(OSI_DMA)/osi_dma.o \
+		  $(OSI_DMA)/osi_dma_txrx.o \
+		  $(OSI_DMA)/mgbe_dma.o \
+		  $(OSI_DMA)/mgbe_desc.o \
+		  $(OSI_DMA)/debug.o \
 		  $(OSI_CORE)/osi_core.o \
 		  $(OSI_CORE)/osi_hal.o \
 		  $(OSI_CORE)/common_macsec.o \
-		  $(OSI_MACSEC)/dwc_macsec.o \
-		  $(OSI_MACSEC)/macsec_debugfs.o \
-		  $(OSI_PHY)/oxpcs.o \
-		  $(OSI_DMA)/osi_dma.o \
-		  $(OSI_DMA)/osi_dma_txrx.o \
-		  $(OSI_CORE)/eqos_core.o \
 		  $(OSI_CORE)/ivc_core.o \
 		  $(OSI_CORE)/mgbe_core.o \
 		  $(OSI_CORE)/core_common.o \
 		  $(OSI_CORE)/xpcs.o \
-		  $(OSI_DMA)/mgbe_dma.o \
-		  $(OSI_CORE)/eqos_mmc.o \
-		  $(OSI_DMA)/eqos_dma.o \
-		  $(OSI_DMA)/eqos_desc.o \
-		  $(OSI_DMA)/mgbe_desc.o \
-		  $(OSI_DMA)/debug.o \
+		  $(OSI_CORE)/xlgpcs.o \
 		  $(OSI_CORE)/mgbe_mmc.o \
 		  $(OSI_CORE)/frp.o \
 		  $(OSI_CORE)/vlan_filter.o \
 		  $(OSI_CORE)/debug.o
 
+#		  $(OSI_CORE)/eqos_core.o \
+#		  $(OSI_CORE)/eqos_mmc.o \
+#		  $(OSI_DMA)/eqos_dma.o \
+#		  $(OSI_DMA)/eqos_desc.o \
+
 include $(src)/hardware/include/config.tmk
+
 
 ifeq ($(IS_OMNI_TEST),1)
 ccflags-y += -DOMNI_TEST

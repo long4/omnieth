@@ -77,8 +77,8 @@ static inline s32 allow_all_vid_tags(u8 *base,
 	u32 vlan_tag_reg = 0;
 	u32 hash_filter_reg = 0;
 
-	vlan_tag_reg = osi_readl(base + MAC_VLAN_TAG_CTRL);
-	hash_filter_reg = osi_readl(base + MAC_VLAN_HASH_FILTER);
+	vlan_tag_reg = osi_readla(NULL, base + MAC_VLAN_TAG_CTRL);
+	hash_filter_reg = osi_readla(NULL, base + MAC_VLAN_HASH_FILTER);
 
 	if (pass_all_vids == OSI_ENABLE) {
 		vlan_tag_reg |= MAC_VLAN_TAG_CTRL_VHTM;
@@ -88,8 +88,8 @@ static inline s32 allow_all_vid_tags(u8 *base,
 		hash_filter_reg &= (u32) ~VLAN_HASH_ALLOW_ALL;
 	}
 
-	osi_writel(vlan_tag_reg, base + MAC_VLAN_TAG_CTRL);
-	osi_writel(hash_filter_reg, base + MAC_VLAN_HASH_FILTER);
+	osi_writela(NULL, vlan_tag_reg, base + MAC_VLAN_TAG_CTRL);
+	osi_writela(NULL, hash_filter_reg, base + MAC_VLAN_HASH_FILTER);
 
 	return 0;
 }
@@ -155,9 +155,8 @@ static inline s32 enqueue_vlan_id(struct osi_core_priv_data *osi_core,
 	/* Check if requested vlan_id alredy queued */
 	ret = is_vlan_id_enqueued(osi_core, vlan_id, &idx);
 	if (ret == 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"VLAN ID already programmed\n",
-			0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			"VLAN ID already programmed: %u\n", vlan_id);
 		return -1;
 	}
 
@@ -189,14 +188,14 @@ static inline s32 poll_for_vlan_filter_reg_rw(
 	count = 0;
 	while (cond == 1) {
 		if (count > retry) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "VLAN filter update timedout\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "VLAN filter update timedout\n");
 			return -1;
 		}
 
 		count++;
 
-		val = osi_readl((u8 *)osi_core->base +
+		val = osi_readla(osi_core, (u8 *)osi_core->mac_base +
 				MAC_VLAN_TAG_CTRL);
 		if ((val & MAC_VLAN_TAG_CTRL_OB) == OSI_NONE) {
 			/* Set cond to 0 to exit loop */
@@ -230,22 +229,22 @@ static inline s32 update_vlan_filters(struct osi_core_priv_data *osi_core,
 				      u32 vid_idx,
 				      u32 val)
 {
-	u8 *base = (u8 *)osi_core->base;
+	u8 *base = (u8 *)osi_core->mac_base;
 	s32 ret = 0;
 
-	osi_writel(val, base + MAC_VLAN_TAG_DATA);
+	osi_writela(osi_core, val, base + MAC_VLAN_TAG_DATA);
 
-	val = osi_readl(base + MAC_VLAN_TAG_CTRL);
+	val = osi_readla(osi_core, base + MAC_VLAN_TAG_CTRL);
 	val &= (u32) ~MAC_VLAN_TAG_CTRL_OFS_MASK;
 	val |= vid_idx << MAC_VLAN_TAG_CTRL_OFS_SHIFT;
 	val &= ~MAC_VLAN_TAG_CTRL_CT;
 	val |= MAC_VLAN_TAG_CTRL_OB;
-	osi_writel(val, base + MAC_VLAN_TAG_CTRL);
+	osi_writela(osi_core, val, base + MAC_VLAN_TAG_CTRL);
 
 	ret = poll_for_vlan_filter_reg_rw(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Failed to update VLAN filters\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Failed to update VLAN filters\n");
 		return -1;
 	}
 
@@ -274,9 +273,8 @@ static inline s32 add_vlan_id(struct osi_core_priv_data *osi_core,
 	/* Check if VLAN ID already programmed */
 	vid_idx = get_vlan_filter_idx(osi_core, vlan_id);
 	if (vid_idx != VLAN_HW_FILTER_FULL_IDX) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"VLAN ID already added\n",
-			0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			"VLAN ID already added: %u\n", vlan_id);
 		return -1;
 	}
 
@@ -290,14 +288,14 @@ static inline s32 add_vlan_id(struct osi_core_priv_data *osi_core,
 			return ret;
 
 		/* Since VLAN HW filters full - program to allow all packets */
-		return allow_all_vid_tags(osi_core->base, OSI_ENABLE);
+		return allow_all_vid_tags(osi_core->mac_base, OSI_ENABLE);
 	}
 
 	osi_core->vf_bitmap |= OSI_BIT_64(vid_idx);
 	osi_core->vid[vid_idx] = vlan_id;
 	if (osi_core->vlan_filter_cnt >= VLAN_NUM_VID) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Reached Max number of VLAN flters\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Reached Max number of VLAN flters\n");
 		return -1;
 	}
 	osi_core->vlan_filter_cnt++;
@@ -308,13 +306,13 @@ static inline s32 add_vlan_id(struct osi_core_priv_data *osi_core,
 						   OSI_DISABLE,
 						   OSI_DISABLE);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"Failed to enable VLAN filtering\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				"Failed to enable VLAN filtering\n");
 			return -1;
 		}
 	}
 
-	val = osi_readl((u8 *)osi_core->base + MAC_VLAN_TAG_DATA);
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MAC_VLAN_TAG_DATA);
 	val &= (u32) ~VLAN_VID_MASK;
 	val |= (vlan_id | MAC_VLAN_TAG_DATA_ETV | MAC_VLAN_TAG_DATA_VEN);
 
@@ -352,7 +350,7 @@ static inline s32 dequeue_vlan_id(struct osi_core_priv_data *osi_core,
 	osi_core->vlan_filter_cnt--;
 
 	if (osi_core->vlan_filter_cnt == VLAN_HW_MAX_NRVF) {
-		return allow_all_vid_tags(osi_core->base, OSI_DISABLE);
+		return allow_all_vid_tags(osi_core->mac_base, OSI_DISABLE);
 	}
 
 	return 0;
@@ -389,7 +387,7 @@ static inline s32 dequeue_vid_to_add_filter_reg(
 	osi_core->vf_bitmap |= OSI_BIT_64(vid_idx);
 	osi_core->vid[vid_idx] = vlan_id;
 
-	val = osi_readl((u8 *)osi_core->base + MAC_VLAN_TAG_DATA);
+	val = osi_readla(osi_core, (u8 *)osi_core->mac_base + MAC_VLAN_TAG_DATA);
 	val &= (u32) ~VLAN_VID_MASK;
 	val |= (vlan_id | MAC_VLAN_TAG_DATA_ETV | MAC_VLAN_TAG_DATA_VEN);
 
@@ -449,8 +447,8 @@ static inline s32 del_vlan_id(struct osi_core_priv_data *osi_core,
 	}
 
 	if (osi_core->vlan_filter_cnt == 0U) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Number of vlan filters is invalid\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Number of vlan filters is invalid\n");
 		return -1;
 	}
 	osi_core->vlan_filter_cnt--;
@@ -461,14 +459,14 @@ static inline s32 del_vlan_id(struct osi_core_priv_data *osi_core,
 						   OSI_DISABLE,
 						   OSI_DISABLE);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-				"Failed to disable VLAN filtering\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				"Failed to disable VLAN filtering\n");
 			return -1;
 		}
 	}
 
 	if (osi_core->vlan_filter_cnt == VLAN_HW_MAX_NRVF) {
-		ret = allow_all_vid_tags(osi_core->base, OSI_DISABLE);
+		ret = allow_all_vid_tags(osi_core->mac_base, OSI_DISABLE);
 		if (ret < 0) {
 			return -1;
 		}

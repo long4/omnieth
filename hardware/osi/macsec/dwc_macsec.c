@@ -15,10 +15,13 @@
  */
 
 #ifdef MACSEC_SUPPORT
+#define DEBUG
 #include <osi_macsec.h>
 #include "dwc_macsec_reg.h"
 #include "../osi/core/common.h"
 #include "../osi/core/core_local.h"
+
+#define MACSEC_LOG(fmt, ...) pr_debug("[DWC_MACSEC] " fmt, ##__VA_ARGS__)
 
 /* DWC TCI field encoding: {ES, SC, SCB, E, C} (5 bits)
  * Standard MACsec (encrypt+auth, SCI present): SC=1, E=1, C=1 = 0x0B
@@ -26,6 +29,11 @@
  */
 #define DWC_TCI_ENCRYPT_AUTH		0x0BU
 #define DWC_TCI_AUTH_ONLY		0x08U
+extern int sess_debug_program_plain_sa_key(const uint8_t *plain_sak,
+size_t sak_len,
+uint32_t sc_idx,
+uint32_t sa_idx,
+uint32_t direction);
 
 /**
  * @brief Map Omni OSD TCI (2 bits: {ES, SC}) to DWC TCI (5 bits: {ES,SC,SCB,E,C})
@@ -74,13 +82,6 @@ static inline u8 dwc_unmap_tci(u8 dwc_tci)
 /* Default PN threshold (SOFT_TTL) - trigger at 75% of 32-bit PN space */
 #define DWC_DEFAULT_PN_THRESHOLD	0xC0000000U
 
-#if 0
-#include <linux/printk.h>
-#define MACSEC_LOG(...) pr_debug(__VA_ARGS__)
-#else
-#define MACSEC_LOG(...)
-#endif
-
 /* ============================================================
  * Polling helpers
  * ============================================================ */
@@ -101,8 +102,8 @@ static s32 dwc_poll_busy(struct osi_core_priv_data *const osi_core,
 		count++;
 		osi_core->osd_ops.udelay(DWC_MACSEC_SAI_RETRY_DELAY);
 	}
-	OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-		     "DWC MACsec busy timeout\n", (u64)reg_offset);
+	OSI_CORE_ERR(osi_core->osd, 
+		     "DWC MACsec busy timeout: %llu\n", (u64)reg_offset);
 	return -1;
 }
 
@@ -122,8 +123,8 @@ static s32 dwc_poll_ready(struct osi_core_priv_data *const osi_core,
 		count++;
 		osi_core->osd_ops.udelay(DWC_MACSEC_SAI_RETRY_DELAY);
 	}
-	OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-		     "DWC MACsec data fetch timeout\n", (u64)reg_offset);
+	OSI_CORE_ERR(osi_core->osd, 
+		     "DWC MACsec data fetch timeout: %llu\n", (u64)reg_offset);
 	return -1;
 }
 
@@ -143,12 +144,12 @@ static s32 dwc_poll_mib_busy(struct osi_core_priv_data *const osi_core)
 		count++;
 		osi_core->osd_ops.udelay(DWC_MACSEC_SAI_RETRY_DELAY);
 	}
-	OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-		     "MIB command timeout\n", 0ULL);
+	OSI_CORE_ERR(osi_core->osd, 
+		     "MIB command timeout\n");
 	return -1;
 }
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 static s32 dwc_poll_aes_busy(struct osi_core_priv_data *const osi_core)
 {
 	u32 retry = DWC_MACSEC_SAI_RETRY_COUNT;
@@ -164,11 +165,11 @@ static s32 dwc_poll_aes_busy(struct osi_core_priv_data *const osi_core)
 		count++;
 		osi_core->osd_ops.udelay(DWC_MACSEC_SAI_RETRY_DELAY);
 	}
-	OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-		     "AES busy timeout\n", 0ULL);
+	OSI_CORE_ERR(osi_core->osd, 
+		     "AES busy timeout\n");
 	return -1;
 }
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 
 /* ============================================================
  * TX/RX SAI (Lookup Table) programming
@@ -1207,7 +1208,7 @@ static u8 dwc_tx_get_active_an(struct osi_core_priv_data *const osi_core,
  * AES Key programming (via separate APB interface: tz_base)
  * ============================================================ */
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 /**
  * @brief Program an AES key into a specific key context
  *
@@ -1354,8 +1355,8 @@ static s32 dwc_aes_fips_selftest(struct osi_core_priv_data *const osi_core)
 	}
 
 	if (count >= DWC_AES_FIPS_POLL_COUNT) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "AES FIPS BIST timeout\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "AES FIPS BIST timeout\n");
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.aes_fips_fail);
 		/* Inhibit output permanently on failure */
 		goto cleanup;
@@ -1363,8 +1364,8 @@ static s32 dwc_aes_fips_selftest(struct osi_core_priv_data *const osi_core)
 
 	/* Step 7: Check fail status */
 	if ((val & DWC_AES_FIPS_STAT_SELF_TEST_FAIL) != OSI_NONE) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "AES FIPS BIST FAILED\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "AES FIPS BIST FAILED: %llu\n",
 			     (u64)(val & DWC_AES_FIPS_STAT_FAIL_CAUSE_MASK));
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.aes_fips_fail);
 		/* Leave output inhibited on failure */
@@ -1385,7 +1386,7 @@ cleanup:
 		    base + DWC_AES_MISC_CONFIG);
 	return -1;
 }
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 
 /* ============================================================
  * MIB counter access
@@ -1537,6 +1538,10 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 	u16 index = lut_config->table_config.index;
 	u16 rw = lut_config->table_config.rw;
 	s32 ret = 0;
+
+	MACSEC_LOG("%s: lut_sel=%u ctlr=%u index=%u rw=%u flags=0x%x\n",
+		   __func__, lut_config->lut_sel, ctlr, index, rw,
+		   lut_config->flags);
 
 	switch (lut_config->lut_sel) {
 	case OSI_LUT_SEL_BYPASS:
@@ -1783,8 +1788,8 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 		break;
 
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid lut_sel\n", (u64)lut_config->lut_sel);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid lut_sel: %llu\n", (u64)lut_config->lut_sel);
 		ret = -1;
 		break;
 	}
@@ -1796,7 +1801,7 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
  * Key table config (compatibility wrapper)
  * ============================================================ */
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 /**
  * @brief Read cached SAK from software lut_status for a key index.
  *
@@ -1828,11 +1833,6 @@ static s32 dwc_kt_read_cached(struct osi_core_priv_data *const osi_core,
 			osi_memcpy(kt_config->entry.sak,
 				   lut_status->sc_info[i].sak,
 				   OSI_KEY_LEN_256);
-#if defined(MACSEC_KEY_PROGRAM)
-			osi_memcpy(kt_config->entry.h,
-				   lut_status->sc_info[i].hkey,
-				   OSI_KEY_LEN_128);
-#endif
 			kt_config->flags |= OSI_LUT_FLAGS_ENTRY_VALID;
 			return 0;
 		}
@@ -1851,6 +1851,9 @@ static s32 dwc_kt_config(struct osi_core_priv_data *const osi_core,
 	u32 key_len_256 = (osi_core->macsec_cipher ==
 				OSI_MACSEC_CIPHER_AES256) ? 1U : 0U;
 
+	MACSEC_LOG("%s: ctlr=%u index=%u rw=%u flags=0x%x\n",
+		   __func__, ctlr, index, rw, kt_config->flags);
+
 	if (rw != OSI_LUT_WRITE) {
 		/* KEY_x registers are write-only; return cached SAK */
 		return dwc_kt_read_cached(osi_core, index, ctlr,
@@ -1868,7 +1871,7 @@ static s32 dwc_kt_config(struct osi_core_priv_data *const osi_core,
 	return dwc_aes_key_program(osi_core, index, kt_config->entry.sak,
 				   key_len_256, encrypt);
 }
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 /* ============================================================
  * Cipher configuration
  * DWC_macsec selects cipher via AES_CTRL.KEY_SZ per key context,
@@ -1881,7 +1884,7 @@ static s32 dwc_cipher_config(struct osi_core_priv_data *const osi_core,
 	/* DWC_macsec sets key size per-context in AES_CTRL.KEY_SZ.
 	 * Store the cipher selection for use during key programming.
 	 */
-	MACSEC_LOG("Cipher config: %u\n", cipher);
+	MACSEC_LOG("%s: cipher=%u\n", __func__, cipher);
 	osi_core->macsec_cipher = cipher;
 	return 0;
 }
@@ -1894,7 +1897,11 @@ static s32 dwc_cipher_config(struct osi_core_priv_data *const osi_core,
 static void dwc_read_mmc(struct osi_core_priv_data *const osi_core)
 {
 	struct osi_macsec_mmc_counters *mmc = &osi_core->macsec_mmc;
+	struct osi_macsec_lut_status *tx_lut;
+	struct osi_macsec_lut_status *rx_lut;
 	u16 i;
+
+	MACSEC_LOG("%s: read MMC counters\n", __func__);
 
 	/* TX Global counters */
 	mmc->tx_pkts_untaged = dwc_mib_read_counter(osi_core,
@@ -1920,25 +1927,43 @@ static void dwc_read_mmc(struct osi_core_priv_data *const osi_core)
 	mmc->rx_octets_validated = dwc_mib_read_counter(osi_core,
 		DWC_MIB_RX_OCTETS_VALIDATED_GBL, 0U, 0U, 0U);
 
-	/* Per-SC counters */
+	/* High-performance Per-SC counters:
+	 * Only poll active SCs that are configured in macsec_lut_status,
+	 * avoiding over 100 blind MIB_CMD indirect bus transactions and polling waits.
+	 */
+	tx_lut = &osi_core->macsec_lut_status[OSI_CTLR_SEL_TX];
 	for (i = 0; i < OSI_MACSEC_MMC_SC_MAX && i < DWC_MACSEC_TX_MAX_SC; i++) {
-		mmc->tx_pkts_protected[i] = dwc_mib_read_counter(osi_core,
-			DWC_MIB_TX_PROTECTED_PKTS_SC, i, 1U, 0U);
+		if (tx_lut->sc_info[i].an_valid != OSI_NONE) {
+			mmc->tx_pkts_protected[i] = dwc_mib_read_counter(osi_core,
+				DWC_MIB_TX_PROTECTED_PKTS_SC, i, 1U, 0U);
+		} else {
+			mmc->tx_pkts_protected[i] = 0;
+		}
 	}
 
+	rx_lut = &osi_core->macsec_lut_status[OSI_CTLR_SEL_RX];
 	for (i = 0; i < OSI_MACSEC_MMC_SC_MAX && i < DWC_MACSEC_RX_MAX_SC; i++) {
-		mmc->rx_pkts_late[i] = dwc_mib_read_counter(osi_core,
-			DWC_MIB_RX_LATE_PKTS_SC, i, 0U, 0U);
-		mmc->rx_pkts_delayed[i] = dwc_mib_read_counter(osi_core,
-			DWC_MIB_RX_DELAYED_PKTS_SC, i, 0U, 0U);
-		mmc->rx_pkts_not_valid[i] = dwc_mib_read_counter(osi_core,
-			DWC_MIB_RX_NOT_VALID_PKTS_SC, i, 0U, 0U);
-		mmc->in_pkts_invalid[i] = dwc_mib_read_counter(osi_core,
-			DWC_MIB_RX_INVALID_PKTS_SC, i, 0U, 0U);
-		mmc->rx_pkts_unchecked[i] = dwc_mib_read_counter(osi_core,
-			DWC_MIB_RX_UNCHECKED_SC, i, 0U, 0U);
-		mmc->rx_pkts_ok[i] = dwc_mib_read_counter(osi_core,
-			DWC_MIB_RX_OK_PKTS_SC, i, 0U, 0U);
+		if (rx_lut->sc_info[i].an_valid != OSI_NONE) {
+			mmc->rx_pkts_late[i] = dwc_mib_read_counter(osi_core,
+				DWC_MIB_RX_LATE_PKTS_SC, i, 0U, 0U);
+			mmc->rx_pkts_delayed[i] = dwc_mib_read_counter(osi_core,
+				DWC_MIB_RX_DELAYED_PKTS_SC, i, 0U, 0U);
+			mmc->rx_pkts_not_valid[i] = dwc_mib_read_counter(osi_core,
+				DWC_MIB_RX_NOT_VALID_PKTS_SC, i, 0U, 0U);
+			mmc->in_pkts_invalid[i] = dwc_mib_read_counter(osi_core,
+				DWC_MIB_RX_INVALID_PKTS_SC, i, 0U, 0U);
+			mmc->rx_pkts_unchecked[i] = dwc_mib_read_counter(osi_core,
+				DWC_MIB_RX_UNCHECKED_SC, i, 0U, 0U);
+			mmc->rx_pkts_ok[i] = dwc_mib_read_counter(osi_core,
+				DWC_MIB_RX_OK_PKTS_SC, i, 0U, 0U);
+		} else {
+			mmc->rx_pkts_late[i] = 0;
+			mmc->rx_pkts_delayed[i] = 0;
+			mmc->rx_pkts_not_valid[i] = 0;
+			mmc->in_pkts_invalid[i] = 0;
+			mmc->rx_pkts_unchecked[i] = 0;
+			mmc->rx_pkts_ok[i] = 0;
+		}
 	}
 }
 
@@ -2048,7 +2073,7 @@ static void dwc_handle_rx_sa_irq(struct osi_core_priv_data *const osi_core,
  *   bit  0 = KEY_DONE
  * ============================================================ */
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 static void dwc_handle_aes_irq(struct osi_core_priv_data *const osi_core)
 {
 	u8 *base = (u8 *)osi_core->tz_base;
@@ -2063,20 +2088,20 @@ static void dwc_handle_aes_irq(struct osi_core_priv_data *const osi_core)
 
 	if ((stat & DWC_AES_IRQ_FSM_PAR_ERR) != OSI_NONE) {
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.aes_fsm_par_err);
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "AES FSM parity error\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "AES FSM parity error\n");
 	}
 
 	if ((stat & DWC_AES_IRQ_REG_PAR_ERR) != OSI_NONE) {
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.aes_reg_par_err);
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "AES register parity error\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "AES register parity error\n");
 	}
 
 	if ((stat & DWC_AES_IRQ_CTX_IDX_ERR) != OSI_NONE) {
 		CERT_C__POST_INC__U64(osi_core->macsec_irq_stats.aes_ctx_idx_err);
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "AES context index error\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "AES context index error\n");
 	}
 
 	if ((stat & DWC_AES_IRQ_KEY_DONE) != OSI_NONE) {
@@ -2086,13 +2111,17 @@ static void dwc_handle_aes_irq(struct osi_core_priv_data *const osi_core)
 	/* W1C: clear all handled AES interrupts */
 	osi_writela(osi_core, stat, base + DWC_AES_IRQ_STAT);
 }
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 
 static void dwc_handle_irq(struct osi_core_priv_data *const osi_core)
 {
 	u8 *base = (u8 *)osi_core->macsec_base;
+	struct osi_macsec_lut_status *tx_lut;
+	struct osi_macsec_lut_status *rx_lut;
 	u32 glbl_stat;
 	u32 i;
+
+	MACSEC_LOG("%s: called\n", __func__);
 
 	/* Handle global error interrupts */
 	glbl_stat = osi_readla(osi_core, base + DWC_MACSEC_IRQ_GLBL_STAT);
@@ -2113,20 +2142,52 @@ static void dwc_handle_irq(struct osi_core_priv_data *const osi_core)
 		osi_writela(osi_core, glbl_stat, base + DWC_MACSEC_IRQ_GLBL_STAT);
 	}
 
-	/* Poll per-SA TX interrupts independently */
-	for (i = 0; i < DWC_MACSEC_TX_MAX_SA; i++) {
-		dwc_handle_tx_sa_irq(osi_core, i);
+	/* High-performance per-SA TX interrupt handling:
+	 * Only poll SAs that are actively configured in RAM (macsec_lut_status),
+	 * avoiding 32 unnecessary MMIO reads across the bus on every IRQ.
+	 */
+	tx_lut = &osi_core->macsec_lut_status[OSI_CTLR_SEL_TX];
+	if (tx_lut->num_of_sc_used > 0) {
+		for (i = 0; i < DWC_MACSEC_TX_MAX_SC; i++) {
+			u32 an_valid = tx_lut->sc_info[i].an_valid;
+
+			if (an_valid == OSI_NONE) {
+				continue;
+			}
+			if ((an_valid & OSI_BIT(0)) != OSI_NONE) {
+				dwc_handle_tx_sa_irq(osi_core, dwc_tx_sa_index(i, 0));
+			}
+			if ((an_valid & OSI_BIT(1)) != OSI_NONE) {
+				dwc_handle_tx_sa_irq(osi_core, dwc_tx_sa_index(i, 1));
+			}
+		}
 	}
 
-	/* Poll per-SA RX interrupts independently */
-	for (i = 0; i < DWC_MACSEC_RX_MAX_SA; i++) {
-		dwc_handle_rx_sa_irq(osi_core, i);
+	/* High-performance per-SA RX interrupt handling:
+	 * Only poll SAs that are actively configured in RAM,
+	 * avoiding 64 unnecessary MMIO reads on every IRQ.
+	 */
+	rx_lut = &osi_core->macsec_lut_status[OSI_CTLR_SEL_RX];
+	if (rx_lut->num_of_sc_used > 0) {
+		for (i = 0; i < DWC_MACSEC_RX_MAX_SC; i++) {
+			u32 an_valid = rx_lut->sc_info[i].an_valid;
+			u8 an;
+
+			if (an_valid == OSI_NONE) {
+				continue;
+			}
+			for (an = 0; an < DWC_MACSEC_RX_SA_PER_SC; an++) {
+				if ((an_valid & OSI_BIT(an)) != OSI_NONE) {
+					dwc_handle_rx_sa_irq(osi_core, dwc_rx_sa_index(i, an));
+				}
+			}
+		}
 	}
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 	/* Handle AES APB domain interrupts (tz_base) */
 	dwc_handle_aes_irq(osi_core);
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 }
 
 /* ============================================================
@@ -2245,7 +2306,7 @@ static s32 dwc_update_mtu(struct osi_core_priv_data *const osi_core,
 	 * DWC_macsec 1.05a checks MTU per-SA via TX_SAD_1_HIGH[13:0].
 	 */
 	osi_core->mtu = mtu;
-	MACSEC_LOG("MTU update: %u\n", mtu);
+	MACSEC_LOG("%s: mtu=%u\n", __func__, mtu);
 	return 0;
 }
 
@@ -2297,8 +2358,6 @@ static s32 dwc_get_avail_sc_idx(struct osi_core_priv_data *const osi_core,
 	return -1;
 }
 
-
-
 static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 				 struct osi_macsec_sc_info *const sc_info,
 				 u16 ctlr, u16 *kt_idx)
@@ -2312,18 +2371,20 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 		sa_idx = dwc_tx_sa_index(sc_info->sc_idx_start, sc_info->curr_an);
 		*kt_idx = sa_idx;
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 		/* Program AES key */
 		if (sc_info->flags == OSI_CREATE_SA) {
 			ret = dwc_aes_key_program(osi_core, sa_idx,
 						  sc_info->sak, key_len_256, 1U);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "TX key program failed\n", 0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "TX key program failed\n");
 				return ret;
 			}
 		}
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#else
+	sess_debug_program_plain_sa_key(sc_info->sak,key_len_256,0,sa_idx,1);
+#endif /* MACSEC_KEY_PROGRAM */
 		/* Program TX SAD — always include XPN SSCI/SALT fields since
 	 * DWC IP_CONTROL.XPNSEL is always set (hardware XPN always on).
 	 * For both CONFIG_MACSEC and MACSEC_KEY_PROGRAM, derive SSCI
@@ -2366,9 +2427,15 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 			}
 
 			if (sc_info->xpn == OSI_ENABLE) {
-				dwc_derive_ssci(sc_info->sci, salt_buf,
-						&sys_id_lo, &sys_id_hi);
-				ret = dwc_tx_salt_write(osi_core, salt_idx, salt_buf);
+				static const u8 zero12[12] = { 0 };
+				const u8 *p_salt = sc_info->salt;
+
+				if (osi_memcmp(sc_info->salt, zero12, sizeof(zero12)) == OSI_NONE_SIGNED) {
+					dwc_derive_ssci(sc_info->sci, salt_buf,
+							&sys_id_lo, &sys_id_hi);
+					p_salt = salt_buf;
+				}
+				ret = dwc_tx_salt_write(osi_core, salt_idx, p_salt);
 				if (ret < 0) {
 					return ret;
 				}
@@ -2394,18 +2461,20 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 		sa_idx = dwc_rx_sa_index(sc_info->sc_idx_start, sc_info->curr_an);
 		*kt_idx = sa_idx;
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 		if (sc_info->flags == OSI_CREATE_SA) {
 			u16 rx_key_idx = sa_idx + DWC_MACSEC_TX_MAX_SA;
 			ret = dwc_aes_key_program(osi_core, rx_key_idx,
 						  sc_info->sak, key_len_256, 0U);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					     "RX key program failed\n", 0ULL);
+				OSI_CORE_ERR(osi_core->osd, 
+					     "RX key program failed\n");
 				return ret;
 			}
 		}
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#else
+		sess_debug_program_plain_sa_key(sc_info->sak,key_len_256,0,sa_idx + DWC_MACSEC_TX_MAX_SA,0);
+#endif /* MACSEC_KEY_PROGRAM */
 		/* DWC manual 3.2: RX order = Key → SAD → SALT → ARW -> SAI → MIB SC */
 		{
 			u8 salt_buf[12];
@@ -2415,9 +2484,8 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 			u32 xpn_lo = 0U, xpn_hi = 0U;
 			u16 salt_idx = sa_idx;
 
-#ifdef CONFIG_MACSEC
-			validate_frames = sc_info->validate_frames;
-#endif /* CONFIG_MACSEC */
+			if(sc_info->validate_frames)
+				validate_frames = sc_info->validate_frames;
 
 			/* System Identifier from SCI[0:5] */
 			sys_id_lo = ((u32)sc_info->sci[2] << 24) |
@@ -2449,9 +2517,15 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 			}
 
 			if (sc_info->xpn == OSI_ENABLE) {
-				dwc_derive_ssci(sc_info->sci, salt_buf,
-						&sys_id_lo, &sys_id_hi);
-				ret = dwc_rx_salt_write(osi_core, salt_idx, salt_buf);
+				static const u8 zero12[12] = { 0 };
+				const u8 *p_salt = sc_info->salt;
+
+				if (osi_memcmp(sc_info->salt, zero12, sizeof(zero12)) == OSI_NONE_SIGNED) {
+					dwc_derive_ssci(sc_info->sci, salt_buf,
+							&sys_id_lo, &sys_id_hi);
+					p_salt = salt_buf;
+				}
+				ret = dwc_rx_salt_write(osi_core, salt_idx, p_salt);
 				if (ret < 0) {
 					return ret;
 				}
@@ -2536,6 +2610,15 @@ static s32 dwc_configure(struct osi_core_priv_data *const osi_core,
 	s32 sc_sw_idx;
 	s32 ret = 0;
 
+	MACSEC_LOG("%s: ctlr=%s enable=%u an=%u next_pn=%u sci=%02x%02x%02x%02x%02x%02x%02x%02x flags=0x%x\n",
+		   __func__, (ctlr == OSI_CTLR_SEL_TX) ? "TX" : "RX",
+		   enable, sc ? sc->curr_an : 0, sc ? sc->next_pn : 0,
+		   sc ? sc->sci[0] : 0, sc ? sc->sci[1] : 0,
+		   sc ? sc->sci[2] : 0, sc ? sc->sci[3] : 0,
+		   sc ? sc->sci[4] : 0, sc ? sc->sci[5] : 0,
+		   sc ? sc->sci[6] : 0, sc ? sc->sci[7] : 0,
+		   sc ? sc->flags : 0);
+
 	if (kt_idx == OSI_NULL) {
 		return -1;
 	}
@@ -2551,29 +2634,32 @@ static s32 dwc_configure(struct osi_core_priv_data *const osi_core,
 	if (sc_sw_idx < 0) {
 		/* SC not found */
 		if (enable == OSI_DISABLE) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "Cannot delete non-existing SC\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "Cannot delete non-existing SC\n");
 			return -1;
 		}
 
 		/* Allocate new SC */
 		sc_sw_idx = dwc_get_avail_sc_idx(osi_core, ctlr);
 		if (sc_sw_idx < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "No available SC index\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "No available SC index\n");
 			return -1;
 		}
 
 		existing_sc = &lut_status->sc_info[sc_sw_idx];
 		osi_memcpy(existing_sc->sci, sc->sci, OSI_SCI_LEN);
 		osi_memcpy(existing_sc->sak, sc->sak, OSI_KEY_LEN_256);
-#ifdef MACSEC_KEY_PROGRAM
-		osi_memcpy(existing_sc->hkey, sc->hkey, OSI_KEY_LEN_128);
-#endif
 		existing_sc->sc_idx_start = (u32)sc_sw_idx;
 		existing_sc->curr_an = sc->curr_an;
 		existing_sc->next_pn = sc->next_pn;
 		existing_sc->lowest_pn = sc->lowest_pn;
+		existing_sc->next_pn_hi = sc->next_pn_hi;
+		existing_sc->lowest_pn_hi = sc->lowest_pn_hi;
+		existing_sc->ssci = sc->ssci;
+		osi_memcpy(existing_sc->salt, sc->salt, sizeof(existing_sc->salt));
+		existing_sc->xpn = sc->xpn;
+		existing_sc->validate_frames = sc->validate_frames;
 		existing_sc->pn_window = sc->pn_window;
 		existing_sc->flags = sc->flags;
 		existing_sc->an_valid = OSI_BIT(sc->curr_an & 0x1FU);
@@ -2628,16 +2714,18 @@ static s32 dwc_configure(struct osi_core_priv_data *const osi_core,
 				 * the caller may not have a valid key (kernel
 				 * doesn't provide key during SA updates).
 				 */
-				osi_memcpy(existing_sc->sak, sc->sak,
-					   OSI_KEY_LEN_256);
-#ifdef MACSEC_KEY_PROGRAM
-				osi_memcpy(existing_sc->hkey, sc->hkey,
-					   OSI_KEY_LEN_128);
-#endif
+				osi_memcpy(existing_sc->sak, sc->sak,OSI_KEY_LEN_256);
+				existing_sc->xpn = sc->xpn;
+				existing_sc->ssci = sc->ssci;
+				osi_memcpy(existing_sc->salt, sc->salt,
+					   sizeof(existing_sc->salt));
+				existing_sc->validate_frames = sc->validate_frames;
 			}
 			existing_sc->curr_an = sc->curr_an;
 			existing_sc->next_pn = sc->next_pn;
 			existing_sc->lowest_pn = sc->lowest_pn;
+			existing_sc->next_pn_hi = sc->next_pn_hi;
+			existing_sc->lowest_pn_hi = sc->lowest_pn_hi;
 			existing_sc->pn_window = sc->pn_window;
 			existing_sc->flags = sc->flags;
 			existing_sc->an_valid |= OSI_BIT(sc->curr_an & 0x1FU);
@@ -2663,6 +2751,11 @@ static s32 dwc_get_sc_lut_key_index(
 	struct osi_macsec_lut_status *lut_status;
 	u32 i;
 
+	MACSEC_LOG("%s: ctlr=%u sci=%02x%02x%02x%02x%02x%02x%02x%02x\n",
+		   __func__, ctlr,
+		   sci ? sci[0] : 0, sci ? sci[1] : 0, sci ? sci[2] : 0, sci ? sci[3] : 0,
+		   sci ? sci[4] : 0, sci ? sci[5] : 0, sci ? sci[6] : 0, sci ? sci[7] : 0);
+
 	if ((sci == OSI_NULL) || (key_index == OSI_NULL)) {
 		return -1;
 	}
@@ -2684,7 +2777,7 @@ static s32 dwc_get_sc_lut_key_index(
 
 	return -1;
 }
-
+#if 0
 /* ============================================================
  * ETH Subsystem CSR: MACsec clock-gate, reset, SRAM zero
  * These registers are outside the MACsec IP, in the ETH CSR block.
@@ -2705,8 +2798,8 @@ static s32 dwc_eth_csr_macsec_init(
 	u32 val;
 
 	if (csr == OSI_NULL) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "csr_base is NULL\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "csr_base is NULL\n");
 		return -1;
 	}
 
@@ -2757,7 +2850,6 @@ static s32 dwc_eth_csr_macsec_init(
 	MACSEC_LOG("ETH CSR: MACsec enabled and reset released\n");
 	return 0;
 }
-
 /**
  * @brief Disable MACsec via ETH CSR: assert reset, gate clock
  *
@@ -2786,6 +2878,7 @@ static void dwc_eth_csr_macsec_deinit(
 	val &= ~ETH_CSR_MACSEC_ENABLE;
 	osi_writela(osi_core, val, csr + ETH_CSR_CTRL_5);
 }
+#endif
 
 /* ============================================================
  * Initialization
@@ -2799,18 +2892,21 @@ static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 	u8 *base = (u8 *)osi_core->macsec_base;
 	s32 ret;
 
+	MACSEC_LOG("%s: mtu=%u macsec_vf_mac=%pM\n",
+		   __func__, mtu, macsec_vf_mac);
+
 	if (osi_core->macsec_initialized == OSI_ENABLE) {
 		return 0;
 	}
-
+#if 0
 	/* Enable MACsec in ETH subsystem CSR (clock-gate + reset + SRAM zero) */
 	ret = dwc_eth_csr_macsec_init(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "ETH CSR MACsec init failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "ETH CSR MACsec init failed\n");
 		return ret;
 	}
-
+#endif
 	/* Configure MACsec_IP_Control:
 	 * - Clear TX/RX bypass (enable MACsec processing)
 	 * - Set data_mode for 25G XLGMII (128-bit)
@@ -2853,45 +2949,45 @@ static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 	/* Initialize MIB counters for both directions */
 	ret = dwc_mib_init(osi_core, 1U); /* TX */
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "TX MIB init failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "TX MIB init failed\n");
 		return ret;
 	}
 	ret = dwc_mib_init(osi_core, 0U); /* RX */
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "RX MIB init failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "RX MIB init failed\n");
 		return ret;
 	}
 
 	/* Clear all SAI, SAD, SALT and ARW tables */
 	ret = dwc_clear_all_sai(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Clear SAI tables failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Clear SAI tables failed\n");
 		return ret;
 	}
 
 	ret = dwc_clear_all_sad(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Clear SAD tables failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd,
+			     "Clear SAD tables failed\n");
 		return ret;
 	}
 
 	/* Clear all XPN SALT table entries */
 	ret = dwc_clear_all_salt(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Clear SALT tables failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd,
+			     "Clear SALT tables failed\n");
 		return ret;
 	}
 
 	/* Clear all RX Anti-Replay Window entries */
 	ret = dwc_clear_all_arw(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Clear ARW table failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Clear ARW table failed\n");
 		return ret;
 	}
 
@@ -2926,31 +3022,24 @@ static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 	}
 	osi_writela(osi_core, val, base + DWC_MACSEC_IRQ_GLBL_EN);
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 	/* Enable AES APB domain interrupts (tz_base):
 	 * Databook 6.2.1: bit 31=GLBL, 17=FSM_PAR_ERR,
 	 * 16=REG_PAR_ERR, 4=CTX_IDX_ERR, 0=KEY_DONE
 	 */
-	{
-		u8 *aes_base = (u8 *)osi_core->tz_base;
-
-		osi_writela(osi_core,
-			    DWC_AES_IRQ_GLBL | DWC_AES_IRQ_ALL,
-			    aes_base + DWC_AES_IRQ_EN);
-	}
-
+	osi_writela(osi_core,DWC_AES_IRQ_GLBL | DWC_AES_IRQ_ALL,
+			    (u8 *)osi_core->tz_base + DWC_AES_IRQ_EN);
 	/* Run FIPS 140-3 self-test (on-demand BIST).
 	 * Per FIPS 140-3, power-up self-test must pass before
 	 * any cryptographic operations are allowed.
 	 */
 	ret = dwc_aes_fips_selftest(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "FIPS self-test failed, MACsec init aborted\n",
-			     0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "FIPS self-test failed, MACsec init aborted\n");
 		return ret;
 	}
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 
 	/* Set up bypass entries (MKPDU, broadcast) */
 	ret = dwc_set_bypass_entries(osi_core);
@@ -2982,6 +3071,8 @@ static s32 dwc_macsec_deinit(struct osi_core_priv_data *const osi_core)
 {
 	s32 ret;
 
+	MACSEC_LOG("%s: called\n", __func__);
+
 	/* Disable MACsec processing (set bypass) */
 	ret = dwc_macsec_enable(osi_core, OSI_DISABLE);
 	if (ret < 0) {
@@ -3004,16 +3095,16 @@ static s32 dwc_macsec_deinit(struct osi_core_priv_data *const osi_core)
 	osi_writela(osi_core, 0U,
 		    (u8 *)osi_core->macsec_base + DWC_MACSEC_IRQ_GLBL_EN);
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 	/* Disable AES APB domain interrupts */
 	osi_writela(osi_core, 0U,
 		    (u8 *)osi_core->tz_base + DWC_AES_IRQ_EN);
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM  */
 
 	osi_core->macsec_initialized = OSI_DISABLE;
 
 	/* Shutdown MACsec in ETH subsystem CSR (assert reset, gate clock) */
-	dwc_eth_csr_macsec_deinit(osi_core);
+	//dwc_eth_csr_macsec_deinit(osi_core);
 
 	MACSEC_LOG("DWC MACsec de-initialized\n");
 	return 0;
@@ -3030,13 +3121,18 @@ static s32 dwc_loopback_config(struct osi_core_priv_data *const osi_core,
 				   u32 enable)
 {
 	/* DWC_macsec doesn't have a dedicated loopback mode register */
-	MACSEC_LOG("Loopback config: %u (not supported on DWC)\n", enable);
+	MACSEC_LOG("%s: enable=%u (not supported on DWC)\n", __func__, enable);
 	return 0;
 }
 
 static s32 dwc_dbg_buf_config(struct osi_core_priv_data *const osi_core,
 				  struct osi_macsec_dbg_buf_config *const dbg_buf_config)
 {
+	MACSEC_LOG("%s: ctlr_sel=%u rw=%u flags=0x%x\n",
+		   __func__,
+		   dbg_buf_config ? dbg_buf_config->ctlr_sel : 0,
+		   dbg_buf_config ? dbg_buf_config->rw : 0,
+		   dbg_buf_config ? dbg_buf_config->flags : 0);
 	/* Not available on DWC_macsec 1.05a */
 	return 0;
 }
@@ -3044,6 +3140,7 @@ static s32 dwc_dbg_buf_config(struct osi_core_priv_data *const osi_core,
 static s32 dwc_dbg_events_config(struct osi_core_priv_data *const osi_core,
 				     struct osi_macsec_dbg_buf_config *const dbg_buf_config)
 {
+	MACSEC_LOG("%s: called\n", __func__);
 	/* Not available on DWC_macsec 1.05a */
 	return 0;
 }
@@ -3052,6 +3149,8 @@ static void dwc_intr_config(struct osi_core_priv_data *const osi_core,
 			    u32 enable)
 {
 	u8 *base = (u8 *)osi_core->macsec_base;
+
+	MACSEC_LOG("%s: enable=%u\n", __func__, enable);
 
 	if (enable == OSI_ENABLE) {
 		osi_writela(osi_core, 0xFFFFFFFFU,
@@ -3096,9 +3195,8 @@ static void dwc_intr_config(struct osi_core_priv_data *const osi_core,
 static s32 dwc_coe_config(struct osi_core_priv_data *const osi_core,
 			      u32 coe_enable, u32 coe_hdr_offset)
 {
-	MACSEC_LOG("DWC COE config: enable=%u hdr_offset=%u"
-		   " (no DWC hardware register; handled by MGBE MAC layer)\n",
-		   coe_enable, coe_hdr_offset);
+	MACSEC_LOG("%s: enable=%u hdr_offset=%u\n",
+		   __func__, coe_enable, coe_hdr_offset);
 
 	/*
 	 * Persist coe_enable in osi_core so that MAC-level paths that query
@@ -3127,9 +3225,8 @@ static s32 dwc_coe_config(struct osi_core_priv_data *const osi_core,
 static s32 dwc_coe_lc(struct osi_core_priv_data *const osi_core,
 			   u32 ch, u32 lc1, u32 lc2)
 {
-	MACSEC_LOG("DWC COE lc: ch=%u lc1=%u lc2=%u"
-		   " (no DWC line-counter register; no-op)\n",
-		   ch, lc1, lc2);
+	MACSEC_LOG("%s: ch=%u lc1=%u lc2=%u\n",
+		   __func__, ch, lc1, lc2);
 	return 0;
 }
 
@@ -3141,13 +3238,15 @@ void macsec_init_ops(void *macsecops)
 {
 	struct osi_macsec_core_ops *macsec_ops = (struct osi_macsec_core_ops *) macsecops;
 	
+	MACSEC_LOG("%s: macsecops=%p\n", __func__, macsecops);
+
 	macsec_ops->init = dwc_macsec_initialize;
 	macsec_ops->deinit = dwc_macsec_deinit;
 	macsec_ops->handle_irq = dwc_handle_irq;
 	macsec_ops->lut_config = dwc_lut_config;
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
+#if defined(MACSEC_KEY_PROGRAM)
 	macsec_ops->kt_config = dwc_kt_config;
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
+#endif /* MACSEC_KEY_PROGRAM */
 	macsec_ops->cipher_config = dwc_cipher_config;
 	macsec_ops->config = dwc_configure;
 	macsec_ops->read_mmc = dwc_read_mmc;
@@ -3161,194 +3260,6 @@ void macsec_init_ops(void *macsecops)
 	macsec_ops->dbg_events_config = dwc_dbg_events_config;
 	macsec_ops->intr_config = dwc_intr_config;
 #endif
-#if 0
-	s32 ret = 0;	
-	static struct osi_macsec_core_ops virt_macsec_ops;
-	if (osi_core->use_virtualization == OSI_ENABLE) {
-		osi_core->macsec_ops = &virt_macsec_ops;
-		ivc_init_macsec_ops(osi_core->macsec_ops);
-	} else {
-		if (osi_core->macsec_base == OSI_NULL) {
-			ret = -1;
-			goto exit;
-		}
-		osi_core->macsec_ops = &macsec_ops;
-	}
-exit:
-	return ret;
-#endif
 }
-
-/* ============================================================
- * Public API wrappers (same interface as Omni's)
- * These dispatch through the ops table.
- * ============================================================ */
-#if 0
-s32 osi_macsec_init(struct osi_core_priv_data *const osi_core,
-			u32 mtu, u8 *const macsec_vf_mac)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->init != OSI_NULL)) {
-		ret = osi_core->macsec_ops->init(osi_core, mtu, macsec_vf_mac);
-	}
-	return ret;
-}
-s32 osi_macsec_deinit(struct osi_core_priv_data *const osi_core)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->deinit != OSI_NULL)) {
-		ret = osi_core->macsec_ops->deinit(osi_core);
-	}
-	return ret;
-}
-
-void osi_macsec_isr(struct osi_core_priv_data *const osi_core)
-{
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->handle_irq != OSI_NULL)) {
-		osi_core->macsec_ops->handle_irq(osi_core);
-	}
-}
-
-s32 osi_macsec_config_lut(struct osi_core_priv_data *const osi_core,
-			      struct osi_macsec_lut_config *const lut_config)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->lut_config != OSI_NULL) &&
-	    (lut_config != OSI_NULL)) {
-		ret = osi_core->macsec_ops->lut_config(osi_core, lut_config);
-	}
-	return ret;
-}
-
-#ifdef MACSEC_KEY_PROGRAM
-s32 osi_macsec_config_kt(struct osi_core_priv_data *const osi_core,
-			     struct osi_macsec_kt_config *const kt_config)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->kt_config != OSI_NULL) &&
-	    (kt_config != OSI_NULL)) {
-		ret = osi_core->macsec_ops->kt_config(osi_core, kt_config);
-	}
-	return ret;
-}
-#endif /* MACSEC_KEY_PROGRAM */
-
-s32 osi_macsec_cipher_config(struct osi_core_priv_data *const osi_core,
-				 u32 cipher)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->cipher_config != OSI_NULL)) {
-		ret = osi_core->macsec_ops->cipher_config(osi_core, cipher);
-	}
-	return ret;
-}
-
-s32 osi_macsec_config(struct osi_core_priv_data *const osi_core,
-			  struct osi_macsec_sc_info *const sc,
-			  u32 enable, u16 ctlr,
-			  u16 *kt_idx)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->config != OSI_NULL)) {
-		ret = osi_core->macsec_ops->config(osi_core, sc, enable,
-						   ctlr, kt_idx);
-	}
-	return ret;
-}
-
-s32 osi_macsec_read_mmc(struct osi_core_priv_data *const osi_core)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->read_mmc != OSI_NULL)) {
-		osi_core->macsec_ops->read_mmc(osi_core);
-		ret = 0;
-	}
-	return ret;
-}
-
-s32 osi_macsec_get_sc_lut_key_index(
-	struct osi_core_priv_data *const osi_core,
-	u8 *sci, u32 *key_index, u16 ctlr)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->get_sc_lut_key_index != OSI_NULL)) {
-		ret = osi_core->macsec_ops->get_sc_lut_key_index(osi_core,
-								 sci, key_index,
-								 ctlr);
-	}
-	return ret;
-}
-
-s32 osi_macsec_update_mtu(struct osi_core_priv_data *const osi_core,
-			      u32 mtu)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->update_mtu != OSI_NULL)) {
-		ret = osi_core->macsec_ops->update_mtu(osi_core, mtu);
-	}
-	return ret;
-}
-
-#ifdef DEBUG_MACSEC
-s32 osi_macsec_loopback(struct osi_core_priv_data *const osi_core,
-			    u32 enable)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->loopback_config != OSI_NULL)) {
-		ret = osi_core->macsec_ops->loopback_config(osi_core, enable);
-	}
-	return ret;
-}
-
-s32 osi_macsec_config_dbg_buf(
-	struct osi_core_priv_data *const osi_core,
-	struct osi_macsec_dbg_buf_config *const dbg_buf_config)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->dbg_buf_config != OSI_NULL)) {
-		ret = osi_core->macsec_ops->dbg_buf_config(osi_core,
-							   dbg_buf_config);
-	}
-	return ret;
-}
-
-s32 osi_macsec_dbg_events_config(
-	struct osi_core_priv_data *const osi_core,
-	struct osi_macsec_dbg_buf_config *const dbg_buf_config)
-{
-	s32 ret = -1;
-
-	if ((osi_core != OSI_NULL) && (osi_core->macsec_ops != OSI_NULL) &&
-	    (osi_core->macsec_ops->dbg_events_config != OSI_NULL)) {
-		ret = osi_core->macsec_ops->dbg_events_config(osi_core,
-							      dbg_buf_config);
-	}
-	return ret;
-}
-#endif /* DEBUG_MACSEC */
-#endif
 
 #endif /* MACSEC_SUPPORT */

@@ -52,8 +52,8 @@ static inline s32 eqos_xpcs_poll_for_an_complete(
 	count = 0;
 	while (cond == 1) {
 		if (count > retry) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "EQOS XPCS AN completion timed out\n", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "EQOS XPCS AN completion timed out\n");
 #ifdef HSI_SUPPORT
 			if (osi_core->hsi.enabled == OSI_ENABLE) {
 				osi_core->hsi.err_code[AUTONEG_ERR_IDX] =
@@ -83,8 +83,8 @@ static inline s32 eqos_xpcs_poll_for_an_complete(
 	}
 
        if ((status & EQOS_XPCS_VR_MII_AN_INTR_STS_LINK_UP) == 0U) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			    "EQOS XPCS AN completed but link is down\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			    "EQOS XPCS AN completed but link is down\n");
 		ret = -1;
 		goto fail;
 	}
@@ -116,20 +116,20 @@ s32 eqos_xpcs_init(struct osi_core_priv_data *osi_core)
 	s32 ret = 0;
 
 	if (osi_core->xpcs_base == OSI_NULL) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "XPCS base is NULL", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "XPCS base is NULL");
 		ret = -1;
 		goto fail;
 	}
 
 	if (osi_core->pre_sil == 0x1U) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Pre-silicon, skipping lane bring up", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Pre-silicon, skipping lane bring up");
 	} else {
 		if (xpcs_lane_bring_up(osi_core) < 0) {
 			ret = -1;
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "XPCS bring up failed", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "XPCS bring up failed");
 			goto fail;
 		}
 	}
@@ -148,8 +148,8 @@ s32 eqos_xpcs_init(struct osi_core_priv_data *osi_core)
 	while (cond == 1) {
 		if (count > retry) {
 			ret = -1;
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "XPCS timeout!!", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "XPCS timeout!!");
 			goto fail;
 		}
 
@@ -181,7 +181,7 @@ s32 eqos_xpcs_init(struct osi_core_priv_data *osi_core)
 		goto fail;
 	}
 	OSI_CORE_INFO(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "EQOS XPCS AN Status", an_status);
+				     "EQOS XPCS AN Status: 0x%llx", an_status);
 	ret = eqos_xpcs_set_speed(osi_core, an_status);
 	if (ret != 0) {
 		goto fail;
@@ -195,8 +195,8 @@ s32 eqos_xpcs_init(struct osi_core_priv_data *osi_core)
 	count = 0;
 	while (cond == 1) {
 		if (count > retry) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				     "XPCS LINK_STS timeout!!", 0ULL);
+			OSI_CORE_ERR(osi_core->osd, 
+				     "XPCS LINK_STS timeout!!");
 #ifdef HSI_SUPPORT
 			/* T264-EQOS_HSIv2-59	Link Training Status Register
 			 * monitoring during Link Training in EQOS PCS

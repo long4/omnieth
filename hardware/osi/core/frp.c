@@ -185,7 +185,7 @@ static void frp_entry_mode_parse(u8 filter_mode,
 		data->inverse_match = OSI_DISABLE;
 		break;
 	default:
-		//OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
+		//OSI_CORE_ERR(osi_core->osd, 
 		//	"Invalid filter mode argment\n",
 		//	filter_mode);
 		break;
@@ -200,14 +200,14 @@ static s32 validate_frp_args(struct osi_core_priv_data *const osi_core,
 				 OSI_UNUSED u8 pos,
 				 u32 *req_entries)
 {
-	u64 dma_sel_val[OSI_MAX_MAC_IP_TYPES] = {0xFFU, 0x3FFU, 0xFFFFFFFFFFFFU};
+	u64 dma_sel_val[OSI_MAX_MAC_IP_TYPES] = {0x3FFU, 0xFFFFFFFFFFFFU};
 	s32 ret = 0;
 	(void)pos;
 
 	/* Validate filter_mode */
 	if (filter_mode >= OSI_FRP_MODE_MAX) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid filter mode argment\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid filter mode argment:%u\n",
 			filter_mode);
 		ret = -1;
 		goto done;
@@ -215,8 +215,8 @@ static s32 validate_frp_args(struct osi_core_priv_data *const osi_core,
 
 	/* Validate offset */
 	if (offset >= OSI_FRP_OFFSET_MAX) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Invalid offset value\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			"Invalid offset value:%u\n",
 			offset);
 		ret = -1;
 		goto done;
@@ -224,8 +224,8 @@ static s32 validate_frp_args(struct osi_core_priv_data *const osi_core,
 
 	/* Validate channel selection */
 	if (dma_sel > dma_sel_val[osi_core->mac]) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "Invalid DMA selection\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid DMA selection:%llu\n",
 			     (u64)dma_sel);
 		ret = -1;
 		goto done;
@@ -297,9 +297,9 @@ static s32 frp_entry_add(struct osi_core_priv_data *const osi_core,
 	case OSI_FRP_MODE_LINK:
 	case OSI_FRP_MODE_IM_LINK:
 		if (frp_entry_find(osi_core, next_frp_id, &i, &j) < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"No Link FRP ID index found\n",
-				OSI_NONE);
+			OSI_CORE_ERR(osi_core->osd, 
+				"No Link FRP ID index found:%d\n",
+				next_frp_id);
 			i = (u8)next_frp_id;
 		}
 		ok_index = i;
@@ -409,9 +409,8 @@ s32 frp_hw_write(struct osi_core_priv_data *const osi_core,
 	ret = ops_p->config_frp(osi_core, OSI_DISABLE);
 	if (ret < 0) {
 		/* Fail to disable try to enable it back */
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"HW Fail on FRP update\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"HW Fail on FRP update\n");
 		tmp = ops_p->config_frp(osi_core, OSI_ENABLE);
 		goto frp_hw_write_error;
 	}
@@ -424,9 +423,8 @@ s32 frp_hw_write(struct osi_core_priv_data *const osi_core,
 			ret = ops_p->update_frp_entry(osi_core, i,
 						      &entry->data);
 			if (ret < 0) {
-				OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-					"Fail to update FRP entry\n",
-					OSI_NONE);
+				OSI_CORE_ERR(osi_core->osd, 
+					"Fail to update FRP entry\n");
 				goto hw_write_enable_frp;
 			}
 		}
@@ -437,9 +435,8 @@ s32 frp_hw_write(struct osi_core_priv_data *const osi_core,
 		bypass_entry.reject_frame = 1;
 		ret = ops_p->update_frp_entry(osi_core, frp_cnt, &bypass_entry);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"Fail to update BYPASS entry\n",
-				OSI_NONE);
+			OSI_CORE_ERR(osi_core->osd, 
+				"Fail to update BYPASS entry\n");
 			goto hw_write_enable_frp;
 		}
 
@@ -533,7 +530,7 @@ static s32 frp_add_proto(struct osi_core_priv_data *const osi_core,
 		/* Check for space */
 		req = (u8)((frp_req_entries(cmd->offset, cmd->match_length) + 1U) & (0xFFU));
 		if (*pos > (OSI_FRP_MAX_ENTRY - req)) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
+			OSI_CORE_ERR(osi_core->osd, 
 				"Fail add FRP protocol entry\n",
 				OSI_NONE);
 			ret = -1;
@@ -549,9 +546,8 @@ static s32 frp_add_proto(struct osi_core_priv_data *const osi_core,
 				    proto_oki, cmd->dma_sel, cmd->dcht,
 				    rchlist_indx);
 		if (ret < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"Fail add FRP protocol entry\n",
-				OSI_NONE);
+			OSI_CORE_ERR(osi_core->osd, 
+				"Fail add FRP protocol entry\n");
 			goto done;
 		}
 
@@ -638,18 +634,16 @@ static s32 frp_delete(struct osi_core_priv_data *const osi_core,
 
 	/* Check for FRP entries  */
 	if (frp_cnt == 0U) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"No FRP entries in the table\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"No FRP entries in the table\n");
 		ret = -1;
 		goto done;
 	}
 
 	/* Find the FRP entry */
 	if (frp_entry_find(osi_core, frp_id, &pos, &count) < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"No FRP entry found to delete\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"No FRP entry found to delete:%d\n", frp_id);
 		ret = -1;
 		goto done;
 	}
@@ -676,9 +670,8 @@ static s32 frp_delete(struct osi_core_priv_data *const osi_core,
 	/* Write FRP Table into HW */
 	ret = frp_hw_write(osi_core, ops_p);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to update FRP NVE\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to update FRP NVE\n");
 	}
 
 done:
@@ -710,9 +703,8 @@ static s32 frp_update(struct osi_core_priv_data *const osi_core,
 
 	/* Validate given frp_id */
 	if (frp_entry_find(osi_core, frp_id, &pos, &count) < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"No FRP entry found\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"No FRP entry found:%d\n", frp_id);
 		ret = -1;
 		goto done;
 	}
@@ -741,9 +733,8 @@ static s32 frp_update(struct osi_core_priv_data *const osi_core,
 
 	/* Reject update on old and new required FRP entries mismatch */
 	if (count != req) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"Old and New required FRP entries mismatch\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Old and New required FRP entries mismatch:%d\n", req);
 		ret = -1;
 		goto done;
 	}
@@ -751,9 +742,8 @@ static s32 frp_update(struct osi_core_priv_data *const osi_core,
 	/* Process and update FRP Command Protocol Entry */
 	ret = frp_add_proto(osi_core, cmd, &pos, rchlist_indx);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to parse match type\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to parse match type\n");
 		goto done;
 	}
 
@@ -764,18 +754,16 @@ static s32 frp_update(struct osi_core_priv_data *const osi_core,
 			    cmd->next_frp_id, cmd->dma_sel,
 			    cmd->dcht, rchlist_indx);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to update FRP entry\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to update FRP entry\n");
 		goto done;
 	}
 
 	/* Write FRP Table into HW */
 	ret = frp_hw_write(osi_core, ops_p);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to update FRP NVE\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to update FRP NVE\n");
 	}
 
 done:
@@ -805,8 +793,8 @@ static s32 frp_add(struct osi_core_priv_data *const osi_core,
 
 	/* Check for MAX FRP entries */
 	if (osi_core->frp_cnt >= OSI_FRP_MAX_ENTRY) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_OUTOFBOUND,
-			"FRP etries are full\n",
+		OSI_CORE_ERR(osi_core->osd, 
+			"FRP etries are full:%d\n",
 			osi_core->frp_cnt);
 		ret = -1;
 		goto done;
@@ -815,9 +803,8 @@ static s32 frp_add(struct osi_core_priv_data *const osi_core,
 	/* Check the FRP entry already exists */
 	ret = frp_entry_find(osi_core, frp_id, &pos, &count);
 	if (ret >= 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			"FRP entry already exists\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"FRP entry already exists:%d\n", frp_id);
 		ret = -1;
 		goto done;
 	}
@@ -829,9 +816,8 @@ static s32 frp_add(struct osi_core_priv_data *const osi_core,
 		/* Find rchlist Free index */
 		rchlist_indx = ops_p->get_rchlist_index(osi_core, OSI_NULL);
 		if (rchlist_indx < 0) {
-			OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-				"Fail to get rchlist index\n",
-				OSI_NONE);
+			OSI_CORE_ERR(osi_core->osd, 
+				"Fail to get rchlist index:%d\n", frp_id);
 			goto done;
 		}
 		osi_core->rch_index[rchlist_indx/*ret*/].in_use = OSI_ENABLE;
@@ -840,9 +826,8 @@ static s32 frp_add(struct osi_core_priv_data *const osi_core,
 	/* Process and add FRP Command Protocal Entry */
 	ret = frp_add_proto(osi_core, cmd, (u8 *)&osi_core->frp_cnt, rchlist_indx);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to parse match type\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to parse match type\n");
 		goto done;
 	}
 
@@ -853,9 +838,8 @@ static s32 frp_add(struct osi_core_priv_data *const osi_core,
 			    cmd->next_frp_id, cmd->dma_sel,
 			    cmd->dcht, rchlist_indx);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to add FRP entry\n",
-			osi_core->frp_cnt);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to add FRP entry:%d\n", frp_id);
 		goto done;
 	}
 
@@ -865,9 +849,8 @@ static s32 frp_add(struct osi_core_priv_data *const osi_core,
 	/* Write FRP Table into HW */
 	ret = frp_hw_write(osi_core, ops_p);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			"Fail to update FRP NVE\n",
-			OSI_NONE);
+		OSI_CORE_ERR(osi_core->osd, 
+			"Fail to update FRP NVE:%d\n", frp_id);
 	}
 
 done:
@@ -894,16 +877,14 @@ s32 setup_frp(struct osi_core_priv_data *const osi_core,
 
 	if ((cmd->frp_id > OSI_FRP_ID_MAX) ||
 	    (cmd->next_frp_id > OSI_FRP_ID_MAX)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid FRP ID\n",
-			      cmd->frp_id);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid FRP ID:%d\n", cmd->frp_id);
 		goto error;
 	}
 	if ((cmd->match_length < OSI_FRP_MATCH_DATA_MIN) ||
 	    (cmd->match_length > OSI_FRP_MATCH_DATA_MAX)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid FRP match_lenght \n",
-			      cmd->frp_id);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid FRP match_length:%d\n", cmd->match_length);
 		goto error;
 	}
 
@@ -918,20 +899,17 @@ s32 setup_frp(struct osi_core_priv_data *const osi_core,
 		ret = frp_delete(osi_core, ops_p, cmd);
 		break;
 	default:
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "Invalid FRP command\n",
-			     cmd->cmd);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "Invalid FRP command:%d\n", cmd->cmd);
 		break;
 	}
 
-	OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_HW_FAIL),
-		      ("FRP instrctions count\n"),
-		      (osi_core->frp_cnt));
+	OSI_CORE_INFO((osi_core->osd), 
+		      ("FRP instrctions count:%d\n"), (osi_core->frp_cnt));
 
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_HW_FAIL,
-			     "FRP command fail\n",
-			      cmd->cmd);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "FRP command fail:%d\n", cmd->cmd);
 	}
 
 error:

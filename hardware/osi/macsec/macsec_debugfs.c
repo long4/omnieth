@@ -92,6 +92,21 @@
 #define RX_SC_CORR_DATA_FETCH	0x80U
 #define RX_SC_CORR_SC_VALUE	0x84U
 
+/* SALT table-access register offsets (XPN) */
+#define TX_SALT_PG		0xA0U
+#define TX_SALT_PRG		0xA4U
+#define TX_SALT_DATA_FETCH	0xA8U
+#define TX_SALT_TABLE_0		0xACU
+#define TX_SALT_TABLE_1		0xB0U
+#define TX_SALT_TABLE_2		0xB4U
+
+#define RX_SALT_PG		0x88U
+#define RX_SALT_PRG		0x8CU
+#define RX_SALT_DATA_FETCH	0x90U
+#define RX_SALT_TABLE_0		0x94U
+#define RX_SALT_TABLE_1		0x98U
+#define RX_SALT_TABLE_2		0x9CU
+
 /* PRG bit fields */
 #define PRG_TYPE_READ		0x0U
 #define PRG_TYPE_WRITE		0x1U
@@ -446,6 +461,8 @@ enum macsec_table_type {
 	TBL_RX_SAD,
 	TBL_RX_ARW,
 	TBL_RX_SC_CORR,
+	TBL_TX_SALT,
+	TBL_RX_SALT,
 };
 
 struct table_desc {
@@ -464,6 +481,8 @@ static const struct table_desc table_list[] = {
 	{ "rx_sad",     TBL_RX_SAD,     64,  RX_SAD_PG,      RX_SAD_PRG,      RX_SAD_DATA_FETCH },
 	{ "rx_arw",     TBL_RX_ARW,     64,  RX_ARW_PG,      RX_ARW_PRG,      RX_ARW_DATA_FETCH },
 	{ "rx_sc_corr", TBL_RX_SC_CORR, 64,  RX_SC_CORR_PG,  RX_SC_CORR_PRG,  RX_SC_CORR_DATA_FETCH },
+	{ "tx_salt",    TBL_TX_SALT,    32,  TX_SALT_PG,     TX_SALT_PRG,     TX_SALT_DATA_FETCH },
+	{ "rx_salt",    TBL_RX_SALT,    512, RX_SALT_PG,     RX_SALT_PRG,     RX_SALT_DATA_FETCH },
 };
 
 static const struct table_desc *find_table(const char *name)
@@ -561,6 +580,24 @@ static void dump_rx_sc_corr_entry(struct seq_file *s, void __iomem *base,
 	seq_printf(s, "  [%2u] SC_index=%u\n", idx, sc_val);
 }
 
+static void dump_tx_salt_entry(struct seq_file *s, void __iomem *base, u32 idx)
+{
+	u32 salt0 = readl(base + TX_SALT_TABLE_0);
+	u32 salt1 = readl(base + TX_SALT_TABLE_1);
+	u32 salt2 = readl(base + TX_SALT_TABLE_2);
+
+	seq_printf(s, "  [%2u] SALT=%08x_%08x_%08x\n", idx, salt0, salt1, salt2);
+}
+
+static void dump_rx_salt_entry(struct seq_file *s, void __iomem *base, u32 idx)
+{
+	u32 salt0 = readl(base + RX_SALT_TABLE_0);
+	u32 salt1 = readl(base + RX_SALT_TABLE_1);
+	u32 salt2 = readl(base + RX_SALT_TABLE_2);
+
+	seq_printf(s, "  [%3u] SALT=%08x_%08x_%08x\n", idx, salt0, salt1, salt2);
+}
+
 static int table_dump_one(struct seq_file *s, void __iomem *base,
 			  const struct table_desc *td, u32 idx)
 {
@@ -605,6 +642,12 @@ static int table_dump_one(struct seq_file *s, void __iomem *base,
 	case TBL_RX_SC_CORR:
 		dump_rx_sc_corr_entry(s, base, idx);
 		break;
+	case TBL_TX_SALT:
+		dump_tx_salt_entry(s, base, idx);
+		break;
+	case TBL_RX_SALT:
+		dump_rx_salt_entry(s, base, idx);
+		break;
 	}
 	return 0;
 }
@@ -645,7 +688,7 @@ static int table_dump_show(struct seq_file *s, void *unused)
 
 	if (ctx->table_cmd[0] == '\0') {
 		seq_puts(s, "Usage: echo \"<table> <start> <end>\" > table_dump\n");
-		seq_puts(s, "Tables: tx_sai rx_sai tx_sad rx_sad rx_arw rx_sc_corr\n");
+		seq_puts(s, "Tables: tx_sai rx_sai tx_sad rx_sad rx_arw rx_sc_corr tx_salt rx_salt\n");
 		return 0;
 	}
 

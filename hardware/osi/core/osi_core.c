@@ -20,12 +20,29 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include "common.h"
 #include <ivc_core.h>
 #include "core_local.h"
-#include "common.h"
+#include "osi_core.h"
 
 /** core local data structure used within RM unit */
 static struct core_local g_core[MAX_CORE_INSTANCES];
+
+static char irq_name[MAC_IRQ_MAX][MAC_IRQ_NAME_SZ] = {
+	"lpi",
+	"sbd",
+	"re",
+	"ue",
+	"xlgpcs-sbd",
+	"xlgpcs-ue",
+	"xlgpcs-ce",
+	"xpcs-sbd",
+	"xpcs-ue",
+	"xpcs-ce",
+	"macsec-irq",
+	"macsec-aes",
+	"macsec-alarm",
+};
 
 /**
  * @brief Function to validate input arguments of API.
@@ -90,6 +107,12 @@ fail:
 	return osi_core;
 }
 
+
+char * osi_get_irq_name(int irq_idx)
+{
+	return irq_name[irq_idx];
+}
+
 #ifdef FSI_EQOS_SUPPORT
 s32 osi_release_core(struct osi_core_priv_data *osi_core)
 {
@@ -143,22 +166,22 @@ static s32 validate_init_core_ops_args(struct osi_core_priv_data *const osi_core
 		goto fail;
 	}
 
-	if (osi_core->osd_ops.ops_log == OSI_NULL) {
+	if (osi_core->osd_ops.log == OSI_NULL) {
 		ret = -1;
 		goto fail;
 	}
 
 	if (osi_core->use_virtualization > OSI_ENABLE) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: wrong use_virtualization\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: wrong use_virtualization\n");
 		ret = -1;
 		goto fail;
 	}
 
 	if ((l_core->magic_num != (u64)osi_core) ||
 	    (l_core->if_init_done == OSI_ENABLE)) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: Invalid magic_num or if_init_done\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: Invalid magic_num or if_init_done\n");
 		ret = -1;
 	}
 
@@ -187,8 +210,8 @@ s32 osi_init_core_ops(struct osi_core_priv_data *const osi_core)
 
 	ret = l_core->if_ops_p->if_init_core_ops(osi_core);
 	if (ret < 0) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "if_init_core_ops failed\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "if_init_core_ops failed\n");
 		goto fail;
 	}
 
@@ -214,8 +237,8 @@ s32 osi_init_core_ops(struct osi_core_priv_data *const osi_core)
 	if (osi_core->pps_frq <= OSI_MAX_PPS_HZ) {
 		l_core->pps_freq = osi_core->pps_frq;
 	} else {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "invalid pps_frq\n", (u64)osi_core->pps_frq);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "invalid pps_frq:%u\n", osi_core->pps_frq);
 		ret = -1;
 	}
 fail:
@@ -361,8 +384,8 @@ s32 osi_handle_ioctl(struct osi_core_priv_data *osi_core,
 	}
 
 	if (data == OSI_NULL) {
-		OSI_CORE_ERR(osi_core->osd, OSI_LOG_ARG_INVALID,
-			     "CORE: Invalid argument\n", 0ULL);
+		OSI_CORE_ERR(osi_core->osd, 
+			     "CORE: Invalid argument\n");
 		goto fail;
 	}
 
@@ -379,4 +402,18 @@ fail:
 	}
 #endif
 	return ret;
+}
+
+s32 osi_handle_get_rss(struct osi_core_priv_data *osi_core,
+				    uint8_t * const hkey, uint32_t * const indir, bool * const enable)
+{
+	struct core_local *l_core = (struct core_local *)(void *)osi_core;
+	return l_core->ops_p->get_rss(osi_core, hkey, indir, enable);
+}
+
+s32 osi_handle_set_rss(struct osi_core_priv_data *osi_core,
+				    const uint8_t * hkey, const uint32_t * indir, const bool enable)
+{
+	struct core_local *l_core = (struct core_local *)(void *)osi_core;
+	return l_core->ops_p->config_rss(osi_core, hkey, indir, enable);
 }

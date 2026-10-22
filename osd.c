@@ -116,56 +116,56 @@ static void osd_usleep(unsigned long long usec)
  * @param[in] line: line number
  * @param[in] level: log level
  * @param[in] type: error type
- * @param[in] err:  error string
- * @param[in] loga: error additional information
+ * @param[in] fmt:  format string
+ * @param[in] ...:  variable arguments for format string
  *
  */
 static void osd_log(void *priv,
 		    const char *func,
 		    unsigned int line,
 		    unsigned int level,
-		    unsigned int type,
-		    const char *err,
-		    unsigned long long loga)
+		    const char *fmt, ...)
 {
+	char buf[512];
+	va_list args;
+	int n;
+
+	n = snprintf(buf, sizeof(buf), "[%s][%d] ", func, line);
+
+	va_start(args, fmt);
+	vsnprintf(buf + n, sizeof(buf) - n, fmt, args);
+	va_end(args);
+
 	if (priv) {
 		switch (level) {
 		case OSI_LOG_INFO:
-			dev_info(((struct ether_priv_data *)priv)->dev,
-				 "[%s][%d][type:0x%x][loga-0x%llx] %s",
-				 func, line, type, loga, err);
+			dev_info(((struct ether_priv_data *)priv)->dev, "%s", buf);
 			break;
-#ifndef OSI_STRIPPED_LIB
 		case OSI_LOG_WARN:
-			dev_warn(((struct ether_priv_data *)priv)->dev,
-				 "[%s][%d][type:0x%x][loga-0x%llx] %s",
-				 func, line, type, loga, err);
+			dev_warn(((struct ether_priv_data *)priv)->dev, "%s", buf);
 			break;
-#endif /* !OSI_STRIPPED_LIB */
 		case OSI_LOG_ERR:
-			dev_err(((struct ether_priv_data *)priv)->dev,
-				"[%s][%d][type:0x%x][loga-0x%llx] %s",
-				func, line, type, loga, err);
+			dev_err(((struct ether_priv_data *)priv)->dev, "%s", buf);
+			break;
+		case OSI_LOG_DBG:
+			dev_err(((struct ether_priv_data *)priv)->dev, "%s", buf);
 			break;
 		default:
 			break;
 		}
-
 	} else {
 		switch (level) {
 		case OSI_LOG_INFO:
-			pr_info("[%s][%d][type:0x%x][loga-0x%llx] %s",
-				func, line, type, loga, err);
+			pr_info("%s", buf);
 			break;
-#ifndef OSI_STRIPPED_LIB
 		case OSI_LOG_WARN:
-			pr_warn("[%s][%d][type:0x%x][loga-0x%llx] %s",
-				func, line, type, loga, err);
+			pr_warn("%s", buf);
 			break;
-#endif /* !OSI_STRIPPED_LIB */
 		case OSI_LOG_ERR:
-			pr_err("[%s][%d][type:0x%x][loga-0x%llx] %s",
-			       func, line, type, loga, err);
+			pr_err("%s", buf);
+			break;
+		case OSI_LOG_DBG:
+			pr_info("%s", buf);
 			break;
 		default:
 			break;
@@ -799,47 +799,6 @@ void osd_transmit_complete(void *priv, const struct osi_tx_swcx *swcx,
 			dev_consume_skb_any(skb);
 		}
 	}
-
-}
-
-#ifdef OSI_DEBUG
-/**
- * @brief Dumps the data to trace buffer
- *
- * @param[in] osi_dma: OSI DMA private data.
- * @param[in] type: Type of data to be dump.
- * @param[in] fmt: Data format.
- */
-static void osd_printf(struct osi_dma_priv_data *osi_dma,
-		       unsigned int type,
-		       const char *fmt, ...)
-{
-	char buf[512];
-	va_list args;
-
-	va_start(args, fmt);
-	vsprintf(buf, fmt, args);
-
-	switch (type) {
-	case OSI_DEBUG_TYPE_DESC:
-#if 0
-		/**
-		 * TODO: trace_printk resulted in kernel warning GVS failure.
-		 * Add support for writing to a file
-		 */
-		trace_printk("%s", buf);
-#endif
-		pr_err("%s", buf);
-		break;
-	case OSI_DEBUG_TYPE_REG:
-	case OSI_DEBUG_TYPE_STRUCTS:
-		pr_err("%s", buf);
-		break;
-	default:
-		pr_err("Unsupported debug type\n");
-		break;
-	}
-	va_end(args);
 }
 
 /**
@@ -849,45 +808,22 @@ static void osd_printf(struct osi_dma_priv_data *osi_dma,
  * @param[in] type: Type of data to be dump.
  * @param[in] fmt: Data format.
  */
-static void osd_core_printf(struct osi_core_priv_data *osi_core,
-			    unsigned int type,
-			    const char *fmt, ...)
+static void osd_debug(const char *fmt, ...)
 {
 	char buf[512];
 	va_list args;
 
 	va_start(args, fmt);
-	vsprintf(buf, fmt, args);
-
-	switch (type) {
-	case OSI_DEBUG_TYPE_REG:
-	case OSI_DEBUG_TYPE_STRUCTS:
-		pr_err("%s", buf);
-		break;
-	default:
-		pr_err("Unsupported debug type\n");
-		break;
-	}
+	vsnprintf(buf, 511, fmt, args);
+	buf[511] = '\0';
+	pr_info("%s", buf);
 	va_end(args);
 }
-#endif
 
 void ether_restart_lane_bringup_task(struct tasklet_struct *t)
 {
 	struct ether_priv_data *pdata = from_tasklet(pdata, t, lane_restart_task);
 
-	if (pdata->osi_core->mac == OSI_MAC_HW_MGBE_T26X) {
-		/**
-		 *  Force restart_lane_bringup_task for the platforms
-		 *  that has force-restart-lane-bringup flag in their DT.
-		 *  And lane bringup will gets executed every time
-		 *  on link change at link partner side.
-		 */
-		if (pdata->force_restart_lane_bringup == OSI_DISABLE) {
-			netdev_info(pdata->ndev, "Ignoring restart_lane_bringup_task!!!\n");
-			return;
-		}
-	}
 	if (pdata->tx_start_stop == OSI_DISABLE) {
 		netif_tx_lock(pdata->ndev);
 		netif_carrier_off(pdata->ndev);
@@ -918,13 +854,11 @@ void osd_restart_lane_bringup(void *priv, unsigned int en_disable)
 void ether_assign_osd_ops(struct osi_core_priv_data *osi_core,
 			  struct osi_dma_priv_data *osi_dma)
 {
-	osi_core->osd_ops.ops_log = osd_log;
+	osi_core->osd_ops.log = osd_log;
 	osi_core->osd_ops.udelay = osd_udelay;
 	osi_core->osd_ops.usleep = osd_usleep;
 	osi_core->osd_ops.padctrl_mii_rx_pins = ether_padctrl_mii_rx_pins;
-#ifdef OSI_DEBUG
-	osi_core->osd_ops.printf = osd_core_printf;
-#endif
+	osi_core->osd_ops.dbg = osd_debug;
 	osi_core->osd_ops.restart_lane_bringup = osd_restart_lane_bringup;
 #ifdef MACSEC_SUPPORT
 	osi_core->osd_ops.macsec_pn_event = macsec_pn_event_handler;
@@ -932,11 +866,9 @@ void ether_assign_osd_ops(struct osi_core_priv_data *osi_core,
 	osi_dma->osd_ops.transmit_complete = osd_transmit_complete;
 	osi_dma->osd_ops.receive_packet = osd_receive_packet;
 	osi_dma->osd_ops.realloc_buf = osd_realloc_buf;
-	osi_dma->osd_ops.ops_log = osd_log;
+	osi_dma->osd_ops.log = osd_log;
 	osi_dma->osd_ops.udelay = osd_udelay;
-#ifdef OSI_DEBUG
-	osi_dma->osd_ops.printf = osd_printf;
-#endif
+	osi_dma->osd_ops.dbg = osd_debug;
 }
 
 /**

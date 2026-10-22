@@ -574,7 +574,7 @@
 /** @} */
 
 /** @addtogroup DWC_AES_CONFIG bit fields (0x10)
- * Databook 6.2.3 �� all fields are read-only HW configuration
+ * Databook 6.2.3 ?? all fields are read-only HW configuration
  * @{ */
 #define DWC_AES_CONFIG_NUM_CTX_SHIFT	15
 #define DWC_AES_CONFIG_NUM_CTX_MASK	(0x1FFFFU << 15)
@@ -603,7 +603,7 @@
 /** @} */
 
 /** @addtogroup DWC_AES_STAT bit fields (0x18)
- * Databook 6.2.5 �� only BUSY bit
+ * Databook 6.2.5 ?? only BUSY bit
  * @{ */
 #define DWC_AES_STAT_BUSY		OSI_BIT(0)
 /** @} */
@@ -616,14 +616,14 @@
 /** @} */
 
 /** @addtogroup DWC_AES_FIPS_SELF_TEST_CTL bit fields (0x50)
- * Databook 6.2.15 �� Exists when DWC_MACSEC_AES_FIPS_EN==1
+ * Databook 6.2.15 ?? Exists when DWC_MACSEC_AES_FIPS_EN==1
  * @{ */
 #define DWC_AES_FIPS_CTL_CHECK		OSI_BIT(1)
 #define DWC_AES_FIPS_CTL_ENA		OSI_BIT(0)
 /** @} */
 
 /** @addtogroup DWC_AES_FIPS_SELF_TEST_STAT bit fields (0x58)
- * Databook 6.2.17 �� all W1C
+ * Databook 6.2.17 ?? all W1C
  * @{ */
 #define DWC_AES_FIPS_STAT_FAIL_CAUSE_MASK	(0x7FU << 4)
 #define DWC_AES_FIPS_STAT_MAC_MATCH_RES		OSI_BIT(2)
@@ -718,20 +718,11 @@
 		} \
 	}
 
-#if defined(MACSEC_KEY_PROGRAM) || defined(CONFIG_MACSEC)
-#define INTEGER_LEN		4U
-#endif /* MACSEC_KEY_PROGRAM || CONFIG_MACSEC */
-
 #ifdef DEBUG_MACSEC
 #define HKEY2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5], (a)[6], (a)[7], (a)[8], (a)[9], (a)[10], (a)[11], (a)[12], (a)[13], (a)[14], (a)[15]
 #define HKEYSTR "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x"
 #define KEY2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5], (a)[6], (a)[7], (a)[8], (a)[9], (a)[10], (a)[11], (a)[12], (a)[13], (a)[14], (a)[15]
 //#define KEYSTR "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x"
 #endif /* DEBUG_MACSEC */
-
-#ifdef HSI_SUPPORT
-/* DWC_macsec uses IRQ_GLBL_STAT with W1C, no separate ISR_SET registers */
-#define MACSEC_COMMON_ISR_SET		DWC_MACSEC_IRQ_GLBL_STAT
-#endif
 
 #endif /* INCLUDED_DWC_MACSEC_REG_H */

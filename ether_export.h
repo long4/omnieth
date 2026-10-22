@@ -214,7 +214,7 @@ enum ob_macsec_nl_commands {
 	OB_MACSEC_CMD_TZ_KT_RESET,
 	/** MACSEC netlink command to de-initialize the MACSEC HW */
 	OB_MACSEC_CMD_DEINIT,
-	/** MACSEC PN event multicast notification (driverâ†’userspace) */
+	/** MACSEC PN event multicast notification (driver¡úuserspace) */
 	OB_MACSEC_CMD_PN_EVENT,
 };
 

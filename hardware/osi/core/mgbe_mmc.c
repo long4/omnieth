@@ -48,7 +48,7 @@ static inline u64 mgbe_update_mmc_val(struct osi_core_priv_data *osi_core,
 					   u64 last_value,
 					   u64 offset)
 {
-	u32 value = osi_readl((u8 *)osi_core->base + offset);
+	u32 value = osi_readla(osi_core, (u8 *)osi_core->mac_base + offset);
 
 	return osi_update_stats_counter(last_value, value);
 }

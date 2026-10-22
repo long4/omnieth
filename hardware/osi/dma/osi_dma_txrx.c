@@ -81,23 +81,21 @@ static inline s32 validate_rx_completions_arg(
 			 (more_data_avail == OSI_NULL) ||
 			 (chan >= l_dma->num_max_chans) ||
 			 (chan >= OSI_MGBE_MAX_NUM_CHANS))) {
+		OSI_DMA_ERR(osi_dma->osd, "validate_input_rx_completions: Invalid rx channel, chan:%u\n", chan);
 		ret = -1;
 		goto fail;
 	}
 
 	*rx_ring = osi_dma->rx_ring[chan];
 	if (osi_unlikely(*rx_ring == OSI_NULL)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "validate_input_rx_completions: Invalid pointers\n",
-			    0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "validate_input_rx_completions: Invalid pointers, chan:%u\n", chan);
 		ret = -1;
 		goto fail;
 	}
 
 	if (((*rx_ring)->cur_rx_idx >= osi_dma->rx_ring_sz) ||
 	     (osi_dma->rx_ring_sz == 0U)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma_txrx: Invalid cur_rx_idx or rx ring size\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid cur_rx_idx or rx ring size, chan:%u\n", chan);
 		ret = -1;
 	}
 
@@ -113,7 +111,7 @@ static inline void process_rx_desc(struct osi_dma_priv_data *osi_dma,
 				   u32 chan, const u32 rx_ring_mask)
 {
 	const u32 es_bits_mask[OSI_MAX_MAC_IP_TYPES] = {
-			RDES3_ES_BITS, RDES3_ES_MGBE, RDES3_ES_MGBE
+			RDES3_ES_MGBE, RDES3_ES_MGBE
 		};
 	struct osi_rx_desc *context_desc = OSI_NULL;
 	struct osi_rx_swcx *ptp_rx_swcx = OSI_NULL;
@@ -247,6 +245,7 @@ static inline u32 compltd_rx_desc_cnt(struct osi_dma_priv_data *osi_dma,
 	return descr_compltd;
 }
 
+#if 0
 static inline s32 is_data_ready_to_process(struct osi_rx_ring *rx_ring,
 					       u8 *base, u32 chan_num)
 {
@@ -300,6 +299,7 @@ static inline s32 is_data_ready_to_process(struct osi_rx_ring *rx_ring,
 
 	return ret;
 }
+#endif
 
 s32 osi_process_rx_completions(struct osi_dma_priv_data *osi_dma,
 				   u32 chan, s32 budget,
@@ -351,16 +351,9 @@ s32 osi_process_rx_completions(struct osi_dma_priv_data *osi_dma,
 
 		/* check for data availability */
 		if ((rx_desc->rdes3 & RDES3_OWN) == RDES3_OWN) {
+			OSI_DMA_INFO("rx%d desc%u: 0x%llx rdes3: 0x%x \n",
+					chan, rx_ring->cur_rx_idx, (u64)rx_desc, rx_desc->rdes3);
 			break;
-		}
-
-		if (osi_dma->mac == OSI_MAC_HW_EQOS) {
-			/* check if data is ready to process */
-			if (is_data_ready_to_process(rx_ring, (u8 *)osi_dma->base,
-						     chan) != 0) {
-				/* Data is not ready not process. retry again */
-				continue;
-			}
 		}
 
 		rx_swcx = rx_ring->rx_swcx + rx_ring->cur_rx_idx;
@@ -389,6 +382,8 @@ s32 osi_process_rx_completions(struct osi_dma_priv_data *osi_dma,
 		/* packet already processed */
 		if ((rx_swcx->flags & OSI_RX_SWCX_PROCESSED) ==
 		     OSI_RX_SWCX_PROCESSED) {
+			OSI_DMA_INFO("rx%d rx_swcx->flags: 0x%x \n",
+					chan, rx_swcx->flags);
 			break;
 		}
 
@@ -409,6 +404,7 @@ s32 osi_process_rx_completions(struct osi_dma_priv_data *osi_dma,
 			rx_pkt_cx->pkt_len = rx_desc->rdes3 & RDES3_PKT_LEN;
 			osi_dma->osd_ops.receive_packet(osi_dma->osd, rx_ring, chan,
 							osi_dma->rx_buf_len, rx_pkt_cx, rx_swcx);
+			OSI_DMA_INFO("rx%d receive only one desc\n", chan);
 			continue;
 		}
 
@@ -611,9 +607,7 @@ static inline s32 validate_tx_completions_arg(
 	*tx_ring = osi_dma->tx_ring[chan];
 
 	if (osi_unlikely(*tx_ring == OSI_NULL)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "validate_tx_completions_arg: Invalid pointers\n",
-			    0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "validate_tx_completions_arg: Invalid pointers, chan:%u\n", chan);
 		ret = -1;
 		goto fail;
 	}
@@ -672,18 +666,9 @@ static inline s32 process_last_desc(struct osi_dma_priv_data *osi_dma,
 
 	/* check for Last Descriptor */
 	if ((tx_desc->tdes3 & TDES3_LD) == TDES3_LD) {
-		if (((tx_desc->tdes3 & TDES3_ES_BITS) != 0U) &&
-		    (osi_dma->mac == OSI_MAC_HW_EQOS)) {
-			txdone_pkt_cx->flags |= OSI_TXDONE_CX_ERROR;
-#ifndef OSI_STRIPPED_LIB
-			/* fill packet error stats */
-			get_tx_err_stats(tx_desc, &osi_dma->pkt_err_stats);
-#endif /* !OSI_STRIPPED_LIB */
-		} else {
 #ifndef OSI_STRIPPED_LIB
 			inc_tx_pkt_stats(osi_dma, chan);
 #endif /* !OSI_STRIPPED_LIB */
-		}
 
 		if (last_processed < INT_MAX) {
 			last_processed++;
@@ -744,6 +729,7 @@ s32 osi_process_tx_completions(struct osi_dma_priv_data *osi_dma,
 		tx_swcx = tx_ring->tx_swcx + entry;
 
 		if ((tx_desc->tdes3 & TDES3_OWN) == TDES3_OWN) {
+			OSI_DMA_INFO("tx%d tdes3:0x%x\n", chan, tx_desc->tdes3);
 			break;
 		}
 
@@ -757,9 +743,7 @@ s32 osi_process_tx_completions(struct osi_dma_priv_data *osi_dma,
 		processed = process_last_desc(osi_dma, tx_desc, txdone_pkt_cx, processed);
 #endif
 
-		if (osi_dma->mac == OSI_MAC_HW_EQOS) {
-			update_tx_done_ts(tx_desc, txdone_pkt_cx);
-		} else if (((tx_swcx->flags & OSI_PKT_CX_PTP) == OSI_PKT_CX_PTP) &&
+		if (((tx_swcx->flags & OSI_PKT_CX_PTP) == OSI_PKT_CX_PTP) &&
 			   // if not master in onestep mode
 			   /* TODO: Is this check needed and can be removed ? */
 			   (is_ptp_twostep_or_slave_mode(osi_dma->ptp_flag) ==
@@ -865,22 +849,17 @@ static inline s32 need_cntx_desc(const struct osi_tx_pkt_cx *const tx_pkt_cx,
 
 		/* This part of code must be at the end of function */
 		if ((tx_pkt_cx->flags & OSI_PKT_CX_PTP) == OSI_PKT_CX_PTP) {
-			if (((mac == OSI_MAC_HW_EQOS) &&
-			    ((ptp_sync_flag & OSI_PTP_SYNC_TWOSTEP) == OSI_PTP_SYNC_TWOSTEP))) {
-				/* Doing nothing */
-			} else {
-				/* Set context type */
-				tx_desc->tdes3 |= TDES3_CTXT;
-				/* in case of One-step sync */
-				if ((ptp_sync_flag & OSI_PTP_SYNC_ONESTEP) ==
-				    OSI_PTP_SYNC_ONESTEP) {
-					/* Set TDES3_OSTC */
-					tx_desc->tdes3 |= TDES3_OSTC;
-					tx_desc->tdes3 &= ~TDES3_TCMSSV;
-				}
-
-				ret = 1;
+			/* Set context type */
+			tx_desc->tdes3 |= TDES3_CTXT;
+			/* in case of One-step sync */
+			if ((ptp_sync_flag & OSI_PTP_SYNC_ONESTEP) ==
+					OSI_PTP_SYNC_ONESTEP) {
+				/* Set TDES3_OSTC */
+				tx_desc->tdes3 |= TDES3_OSTC;
+				tx_desc->tdes3 &= ~TDES3_TCMSSV;
 			}
+
+			ret = 1;
 		}
 	}
 
@@ -1058,21 +1037,18 @@ static inline s32 validate_ctx(const struct osi_dma_priv_data *const osi_dma,
 	if ((tx_pkt_cx->flags & OSI_PKT_CX_TSO) == OSI_PKT_CX_TSO) {
 		if (osi_unlikely((tx_pkt_cx->tcp_udp_hdrlen /
 				  OSI_TSO_HDR_LEN_DIVISOR) > TDES3_THL_MASK)) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "dma_txrx: Invalid TSO header len\n",
+			OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid TSO header len:%llu\n",
 				    (u64)tx_pkt_cx->tcp_udp_hdrlen);
 			ret = -1;
 			goto fail;
 		} else if (osi_unlikely(tx_pkt_cx->payload_len >
 					TDES3_TPL_MASK)) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "dma_txrx: Invalid TSO payload len\n",
+			OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid TSO payload len:%llu\n",
 				    (u64)tx_pkt_cx->payload_len);
 			ret = -1;
 			goto fail;
 		} else if (osi_unlikely(tx_pkt_cx->mss > TDES2_MSS_MASK)) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "dma_txrx: Invalid MSS\n",
+			OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid MSS:%llu\n",
 				    (u64)tx_pkt_cx->mss);
 			ret = -1;
 			goto fail;
@@ -1081,8 +1057,7 @@ static inline s32 validate_ctx(const struct osi_dma_priv_data *const osi_dma,
 		}
 	}  else if ((tx_pkt_cx->flags & OSI_PKT_CX_LEN) == OSI_PKT_CX_LEN) {
 		if (osi_unlikely(tx_pkt_cx->payload_len > TDES3_PL_MASK)) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "dma_txrx: Invalid frame len\n",
+			OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid frame len:%llu\n",
 				    (u64)tx_pkt_cx->payload_len);
 			ret = -1;
 			goto fail;
@@ -1092,8 +1067,7 @@ static inline s32 validate_ctx(const struct osi_dma_priv_data *const osi_dma,
 	}
 
 	if (osi_unlikely(tx_pkt_cx->vtag_id > TDES3_VT_MASK)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma_txrx: Invalid VTAG_ID\n",
+		OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid VTAG_ID:%llu\n",
 			    (u64)tx_pkt_cx->vtag_id);
 		ret = -1;
 	}
@@ -1192,8 +1166,7 @@ static inline void set_swcx_pkt_id_for_ptp(struct osi_dma_priv_data *osi_dma,
 					   u32 pkt_id,
 					   u32 vdma_id)
 {
-	if (((tx_pkt_cx->flags & OSI_PKT_CX_PTP) == OSI_PKT_CX_PTP) &&
-	    (osi_dma->mac > OSI_MAC_HW_EQOS)) {
+	if ((tx_pkt_cx->flags & OSI_PKT_CX_PTP) == OSI_PKT_CX_PTP) {
 		last_swcx->flags |= OSI_PKT_CX_PTP;
 		last_swcx->pktid = pkt_id;
 		if (osi_dma->mac == OSI_MAC_HW_MGBE_T26X) {
@@ -1213,7 +1186,7 @@ s32 hw_transmit(struct osi_dma_priv_data *osi_dma,
 		    struct osi_tx_ring *tx_ring,
 		    u32 dma_chan)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	struct dma_local *l_dma = (struct dma_local *)(void *)osi_dma;
 	struct osi_tx_pkt_cx *tx_pkt_cx = OSI_NULL;
 	struct osi_tx_desc *first_desc = OSI_NULL;
@@ -1229,7 +1202,6 @@ s32 hw_transmit(struct osi_dma_priv_data *osi_dma,
 	// Added bitwise with 0xFF to avoid CERT INT30-C error
 	u32 chan = ((dma_chan & chan_mask[local_mac]) & (0xFFU));
 	const u32 tail_ptr_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_TDTP(chan),
 		MGBE_DMA_CHX_TDTLP(chan),
 		MGBE_DMA_CHX_TDTLP(chan)
 	};
@@ -1244,8 +1216,7 @@ s32 hw_transmit(struct osi_dma_priv_data *osi_dma,
 
 	entry = tx_ring->cur_tx_idx;
 	if (entry >= osi_dma->tx_ring_sz) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma_txrx: Invalid cur_tx_idx\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid cur_tx_idx:%u\n", entry);
 		ret = -1;
 		goto fail;
 	}
@@ -1257,8 +1228,7 @@ s32 hw_transmit(struct osi_dma_priv_data *osi_dma,
 	desc_cnt = tx_pkt_cx->desc_cnt;
 	if (osi_unlikely(desc_cnt == 0U)) {
 		/* Will not hit this case */
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma_txrx: Invalid desc_cnt\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid desc_cnt:%u\n", desc_cnt);
 		ret = -1;
 		goto fail;
 	}
@@ -1275,8 +1245,7 @@ s32 hw_transmit(struct osi_dma_priv_data *osi_dma,
 	cntx_desc_consumed = need_cntx_desc(tx_pkt_cx, tx_swcx, tx_desc,
 					    osi_dma->ptp_flag, osi_dma->mac);
 	if (cntx_desc_consumed == 1) {
-		if (((tx_pkt_cx->flags & OSI_PKT_CX_PTP) == OSI_PKT_CX_PTP) &&
-		    (osi_dma->mac > OSI_MAC_HW_EQOS)) {
+		if ((tx_pkt_cx->flags & OSI_PKT_CX_PTP) == OSI_PKT_CX_PTP) {
 			/* mark packet id valid */
 			tx_desc->tdes3 |= TDES3_PIDV;
 			if ((osi_dma->ptp_flag & OSI_PTP_SYNC_ONESTEP) ==
@@ -1372,8 +1341,7 @@ s32 hw_transmit(struct osi_dma_priv_data *osi_dma,
 		  (entry * sizeof(struct osi_tx_desc));
 	if (osi_unlikely(tailptr < tx_ring->tx_desc_phy_addr)) {
 		/* Will not hit this case */
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma_txrx: Invalid tx_desc_phy_addr\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid tx_desc_phy_addr:%llu\n", tailptr);
 		ret = -1;
 		goto fail;
 	}
@@ -1386,6 +1354,7 @@ s32 hw_transmit(struct osi_dma_priv_data *osi_dma,
 
 	/* Update the Tx tail pointer */
 	osi_dma_writel(L32(tailptr), (u8 *)osi_dma->base + tail_ptr_reg[local_mac]);
+	OSI_DMA_INFO("txq%d doorbell:0x%llx\n", chan, tailptr);
 
 fail:
 	return ret;
@@ -1415,26 +1384,23 @@ fail:
 static s32 rx_dma_desc_initialization(const struct osi_dma_priv_data *const osi_dma,
 					  u32 dma_chan)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	const u32 local_mac = osi_dma->mac % OSI_MAX_MAC_IP_TYPES;
 	// Added bitwise with 0xFF to avoid CERT INT30-C error
 	u32 chan = ((dma_chan & chan_mask[local_mac]) & (0xFFU));
 	const u32 start_addr_high_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RDLH(chan),
 		MGBE_DMA_CHX_RDLH(chan),
 		MGBE_DMA_CHX_RDLH(chan)
 	};
 	const u32 start_addr_low_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RDLA(chan),
 		MGBE_DMA_CHX_RDLA(chan),
 		MGBE_DMA_CHX_RDLA(chan)
 	};
 	const u32 ring_len_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RDRL(chan),
 		MGBE_DMA_CHX_RX_CNTRL2(chan),
 		MGBE_DMA_CHX_RX_CNTRL2(chan)
 	};
-	const u32 mask[OSI_MAX_MAC_IP_TYPES] = { 0x3FFU, 0x3FFFU, 0x3FFFU };
+	const u32 mask[OSI_MAX_MAC_IP_TYPES] = { 0x3FFFU, 0x3FFFU };
 	struct osi_rx_ring *rx_ring = OSI_NULL;
 	struct osi_rx_desc *rx_desc = OSI_NULL;
 	struct osi_rx_swcx *rx_swcx = OSI_NULL;
@@ -1445,8 +1411,7 @@ static s32 rx_dma_desc_initialization(const struct osi_dma_priv_data *const osi_
 
 	rx_ring = osi_dma->rx_ring[chan];
 	if (osi_unlikely(rx_ring == OSI_NULL)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma_txrx: Invalid argument\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma_txrx: Invalid argument:%u\n", chan);
 		ret = -1;
 		goto fail;
 	};
@@ -1468,10 +1433,6 @@ static s32 rx_dma_desc_initialization(const struct osi_dma_priv_data *const osi_
 		rx_desc->rdes1 = H32(rx_swcx->buf_phy_addr);
 		rx_desc->rdes2 = 0;
 		rx_desc->rdes3 = RDES3_IOC;
-
-		if (osi_dma->mac == OSI_MAC_HW_EQOS) {
-			rx_desc->rdes3 |= RDES3_B1V;
-		}
 
 		/* reconfigure INTE bit if RX watchdog timer is enabled */
 		if (osi_dma->use_riwt == OSI_ENABLE) {
@@ -1496,8 +1457,7 @@ static s32 rx_dma_desc_initialization(const struct osi_dma_priv_data *const osi_
 
 	if (osi_unlikely((tailptr < rx_ring->rx_desc_phy_addr))) {
 		/* Will not hit this case */
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma_txrx: Invalid phys address\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma_txrx_%u: Invalid phys address:%llu\n", chan, tailptr);
 		ret = -1;
 		goto fail;
 	}
@@ -1562,26 +1522,23 @@ static inline void set_tx_ring_len_and_start_addr(const struct osi_dma_priv_data
 						  u32 dma_chan,
 						  u32 len)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	const u32 local_mac = osi_dma->mac % OSI_MAX_MAC_IP_TYPES;
 	// Added bitwise with 0xFF to avoid CERT INT30-C error
 	u32 chan = ((dma_chan & chan_mask[local_mac]) & (0xFFU));
 	const u32 ring_len_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_TDRL(chan),
 		MGBE_DMA_CHX_TX_CNTRL2(chan),
 		MGBE_DMA_CHX_TX_CNTRL2(chan)
 	};
 	const u32 start_addr_high_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_TDLH(chan),
 		MGBE_DMA_CHX_TDLH(chan),
 		MGBE_DMA_CHX_TDLH(chan)
 	};
 	const u32 start_addr_low_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_TDLA(chan),
 		MGBE_DMA_CHX_TDLA(chan),
 		MGBE_DMA_CHX_TDLA(chan)
 	};
-	const u32 mask[OSI_MAX_MAC_IP_TYPES] = { 0x3FFU, 0x3FFFU, 0x3FFFU };
+	const u32 mask[OSI_MAX_MAC_IP_TYPES] = { 0x3FFFU, 0x3FFFU };
 	u32 val;
 
 	/* Program ring length */
@@ -1628,8 +1585,7 @@ static s32 tx_dma_desc_init(const struct osi_dma_priv_data *const osi_dma)
 
 		tx_ring = osi_dma->tx_ring[chan];
 		if (osi_unlikely(tx_ring == OSI_NULL)) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "dma_txrx: Invalid pointers\n", 0ULL);
+			OSI_DMA_ERR(osi_dma->osd, "dma_txrx_%u: Invalid pointers\n", chan);
 			ret = -1;
 			goto fail;
 		}
@@ -1689,7 +1645,7 @@ void init_desc_ops(const struct osi_dma_priv_data *const osi_dma)
 	typedef void (*desc_ops_arr)(struct desc_ops *p_ops);
 
 	const desc_ops_arr desc_ops_a[OSI_MAX_MAC_IP_TYPES] = {
-		eqos_init_desc_ops, mgbe_init_desc_ops, mgbe_init_desc_ops
+		mgbe_init_desc_ops, mgbe_init_desc_ops
 	};
 
 	desc_ops_a[osi_dma->mac](&d_ops[osi_dma->mac]);

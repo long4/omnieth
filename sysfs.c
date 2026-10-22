@@ -1313,8 +1313,7 @@ static void dump_byp_lut(char **buf_p, unsigned short ctlr_sel,
 	char *buf = *buf_p;
 	int i;
 	const unsigned int byp_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_BYP_LUT_MAX_INDEX,
-		OSI_BYP_LUT_MAX_INDEX_T26X};
+		OSI_BYP_LUT_MAX_INDEX};
 
 	for (i = 0; i <= byp_lut_max_index[osi_core->macsec]; i++) {
 		memset(&lut_config, OSI_NONE, sizeof(lut_config));
@@ -1401,8 +1400,7 @@ static ssize_t macsec_byp_lut_store(struct device *dev,
 	int ret, bufp, ctrl_port;
 	unsigned int macsec = osi_core->macsec;
 	const unsigned int byp_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_BYP_LUT_MAX_INDEX,
-		OSI_BYP_LUT_MAX_INDEX_T26X};
+		OSI_BYP_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -1471,7 +1469,7 @@ static ssize_t macsec_mmc_counters_show_rx(struct device *dev,
 	char *start = buf;
 	unsigned int macsec = osi_core->macsec;
 	const unsigned int sc_idx_max[MAX_MACSEC_IP_TYPES] = {
-			OSI_SC_INDEX_MAX, OSI_SC_INDEX_MAX_T26X};
+			OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -1539,7 +1537,7 @@ static ssize_t macsec_mmc_counters_show_tx(struct device *dev,
 	char *start = buf;
 	unsigned int macsec = osi_core->macsec;
 	const unsigned int sc_idx_max[MAX_MACSEC_IP_TYPES] = {
-			OSI_SC_INDEX_MAX, OSI_SC_INDEX_MAX_T26X};
+			OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -1637,10 +1635,6 @@ static ssize_t macsec_dbg_buffer_show(struct device *dev,
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
 		return 0;
 	}
-	if (osi_core->macsec == OSI_MACSEC_T26X) {
-		dev_err(pdata->dev, "T264 Doesn't support MACSEC debug buffer feature\n");
-		return 0;
-	}
 
 	buf += scnprintf(buf, PAGE_SIZE, "Tx Dbg Buffers:\n");
 	dump_dbg_buffers(&buf, OSI_CTLR_SEL_TX, osi_core);
@@ -1685,10 +1679,6 @@ static ssize_t macsec_dbg_events_store(struct device *dev,
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
-		return size;
-	}
-	if (osi_core->macsec == OSI_MACSEC_T26X) {
-		dev_err(pdata->dev, "T264 Doesn't support MACSEC debug buffer feature\n");
 		return size;
 	}
 
@@ -1753,8 +1743,7 @@ static ssize_t macsec_sci_lut_show_rx(struct device *dev,
 	char *start = buf;
 	unsigned int macsec = osi_core->macsec;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -1828,8 +1817,7 @@ static ssize_t macsec_sci_lut_show_tx(struct device *dev,
 	char *start = buf;
 	unsigned int macsec = osi_core->macsec;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -1903,8 +1891,7 @@ static ssize_t macsec_sci_lut_show_tx_2(struct device *dev,
 	char *start = buf;
 	unsigned int macsec = osi_core->macsec;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -1984,8 +1971,7 @@ static ssize_t macsec_sci_lut_store(struct device *dev,
 	int sc_index;
 	unsigned int macsec = osi_core->macsec;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2272,8 +2258,7 @@ static ssize_t macsec_tx_kt_show(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2304,8 +2289,7 @@ static ssize_t macsec_tx_kt_show_2(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2338,8 +2322,7 @@ static ssize_t macsec_tx_kt_show_3(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2373,8 +2356,7 @@ static ssize_t macsec_rx_kt_show(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2405,8 +2387,7 @@ static ssize_t macsec_rx_kt_show_2(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2439,8 +2420,7 @@ static ssize_t macsec_rx_kt_show_3(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2484,8 +2464,7 @@ static ssize_t macsec_kt_store(struct device *dev,
 	int temp[OSI_KEY_LEN_256] = {0};
 	unsigned char sak[OSI_KEY_LEN_256] = {0};
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	int valid, index, ctlr, key256bit;
 	int i, ret, bufp = 0;
@@ -2645,8 +2624,7 @@ static void dump_sc_state_lut(char **buf_p, unsigned short ctlr_sel,
 	char *buf = *buf_p;
 	int i;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	for (i = 0; i <= sc_lut_max_index[osi_core->macsec]; i++) {
 		memset(&lut_config, OSI_NONE, sizeof(lut_config));
@@ -2719,8 +2697,7 @@ static ssize_t macsec_sc_state_lut_store(struct device *dev,
 	int ret;
 	u32 curr_an;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -2773,8 +2750,7 @@ static void dump_sa_state_lut(char **buf_p, unsigned short ctlr_sel,
 	char *buf = *buf_p;
 	int i;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	for (i = 0; i <= lut_max_index[osi_core->macsec]; i++) {
 		memset(&lut_config, OSI_NONE, sizeof(lut_config));
@@ -2898,8 +2874,7 @@ static ssize_t macsec_sa_state_lut_store(struct device *dev,
 	int ret;
 	unsigned int next_pn, lowest_pn;
 	const u32 lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SA_LUT_MAX_INDEX,
-		OSI_SA_LUT_MAX_INDEX_T26X};
+		OSI_SA_LUT_MAX_INDEX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -3041,8 +3016,7 @@ static ssize_t macsec_sc_param_tx_lut_show_2(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -3076,8 +3050,7 @@ static ssize_t macsec_sc_param_tx_lut_show(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -3108,8 +3081,7 @@ static ssize_t macsec_sc_param_rx_lut_show(struct device *dev,
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 	char *start = buf;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -3148,10 +3120,9 @@ static ssize_t macsec_sc_param_lut_store(struct device *dev,
 	int sci[OSI_SCI_LEN] = {0};
 	unsigned int pn_max, pn_threshold, key_index_start, pn_window;
 	const unsigned int sc_lut_max_index[MAX_MACSEC_IP_TYPES] = {
-		OSI_SC_INDEX_MAX,
-		OSI_SC_INDEX_MAX_T26X};
+		OSI_SC_INDEX_MAX};
 	const unsigned int key_idx_max[MAX_MACSEC_IP_TYPES] = {
-			OSI_KEY_INDEX_MAX, OSI_KEY_INDEX_MAX_T26X };
+			OSI_KEY_INDEX_MAX };
 
 	if (!netif_running(ndev)) {
 		dev_err(pdata->dev, "Not Allowed. Ether interface is not up\n");
@@ -3302,6 +3273,58 @@ static DEVICE_ATTR(macsec_irq_stats, (S_IRUGO | S_IWUSR),
 		   NULL);
 #endif /* MACSEC_SUPPORT */
 
+static ssize_t ether_phy_iface_mode_25g(u32 phy_iface_mode, char *buf)
+{
+	switch (phy_iface_mode) {
+	case OSI_AUI_MODE_25G:
+		return scnprintf(buf, PAGE_SIZE, "25GAUI\n");
+	case OSI_CR_MODE_25G:
+		return scnprintf(buf, PAGE_SIZE, "25GBASE-CR\n");
+	case OSI_KR_MODE_25G:
+		return scnprintf(buf, PAGE_SIZE, "25GBASE-KR\n");
+	case OSI_SR_MODE_25G:
+		return scnprintf(buf, PAGE_SIZE, "25GBASE-SR\n");
+	case OSI_LR_MODE_25G:
+		return scnprintf(buf, PAGE_SIZE, "25GBASE-LR\n");
+	default:
+		return scnprintf(buf, PAGE_SIZE, "25GAUI\n");
+	}
+
+}
+
+static ssize_t ether_phy_iface_mode_10g(u32 phy_iface_mode, char *buf)
+{
+	switch (phy_iface_mode) {
+	case OSI_SFI_MODE_10G:
+		return scnprintf(buf, PAGE_SIZE, "SFI-10G\n");
+	case OSI_CR_MODE_10G:
+		return scnprintf(buf, PAGE_SIZE, "10GBASE-CR\n");
+	case OSI_KR_MODE_10G:
+		return scnprintf(buf, PAGE_SIZE, "10GBASE-KR\n");
+	case OSI_SR_MODE_10G:
+		return scnprintf(buf, PAGE_SIZE, "10GBASE-SR\n");
+	case OSI_LR_MODE_10G:
+		return scnprintf(buf, PAGE_SIZE, "10GBASE-LR\n");
+	case OSI_USXGMII_MODE_10G:
+		return scnprintf(buf, PAGE_SIZE, "USXGMII-10G\n");
+	default:
+		return scnprintf(buf, PAGE_SIZE, "USXGMII-10G\n");
+	}
+}
+
+static ssize_t ether_phy_iface_mode_1g(u32 phy_iface_mode, char *buf)
+{
+	switch (phy_iface_mode) {
+	case OSI_SGMII_MODE_1G:
+		return scnprintf(buf, PAGE_SIZE, "SGMII-1G\n");
+	case OSI_KX_MODE_1G:
+		return scnprintf(buf, PAGE_SIZE, "1000BASE-KX\n");
+	case OSI_RGMII_MODE_1G:
+		return scnprintf(buf, PAGE_SIZE, "RGMII-1G\n");
+	default:
+		return scnprintf(buf, PAGE_SIZE, "SGMII-10G\n");
+	}
+}
 /**
  * @brief Shows the current driver setting for PHY iface mode
  *
@@ -3321,20 +3344,75 @@ static ssize_t ether_phy_iface_mode_show(struct device *dev,
 	struct ether_priv_data *pdata = netdev_priv(ndev);
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 
-	switch (osi_core->phy_iface_mode) {
-	case OSI_XFI_MODE_10G:
-		return scnprintf(buf, PAGE_SIZE, "XFI-10G\n");
-	case OSI_XFI_MODE_5G:
-		return scnprintf(buf, PAGE_SIZE, "XFI-5G\n");
-	case OSI_USXGMII_MODE_10G:
-		return scnprintf(buf, PAGE_SIZE, "USX-10G\n");
-	case OSI_USXGMII_MODE_5G:
-		return scnprintf(buf, PAGE_SIZE, "USX-5G\n");
-	default:
-		return scnprintf(buf, PAGE_SIZE, "XFI-10G\n");
+        switch (osi_core->phy_gbe_mode) {
+        case OSI_GBE_MODE_25G:
+                return ether_phy_iface_mode_25g(osi_core->phy_iface_mode, buf);
+        case OSI_GBE_MODE_10G:
+                return ether_phy_iface_mode_10g(osi_core->phy_iface_mode, buf);
+        case OSI_GBE_MODE_5G:
+		return scnprintf(buf, PAGE_SIZE, "USXGMII-5G\n");
+        case OSI_GBE_MODE_2_5G:
+		return scnprintf(buf, PAGE_SIZE, "USXGMII-2.5G\n");
+	case OSI_GBE_MODE_1G:
+                return ether_phy_iface_mode_1g(osi_core->phy_iface_mode, buf);
+        case OSI_GBE_MODE_100M:
+		return scnprintf(buf, PAGE_SIZE, "RGMII-100M\n");
+        default:
+                return scnprintf(buf, PAGE_SIZE, "SGMII-1G\n");
+        }
+}
+
+static void ether_phy_iface_mode_store_25g(struct osi_core_priv_data *osi_core, const char *buf)
+{
+	if (strncmp(buf, "25GAUI", 6) == 0U) {
+                osi_core->phy_iface_mode = OSI_AUI_MODE_25G;
+        } else if (strncmp(buf, "25GBASE-CR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_CR_MODE_25G;
+        } else if (strncmp(buf, "25GBASE-KR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_KR_MODE_25G;
+        } else if (strncmp(buf, "25GBASE-SR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_SR_MODE_25G;
+        } else if (strncmp(buf, "25GBASE-LR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_LR_MODE_25G;
+        } else{
+		dev_err(osi_core->dev,
+                        "Invalid value passed. Valid values: 25GBASE-[CR KR SR LR]/25GAUI\n");
 	}
 }
 
+static void ether_phy_iface_mode_store_10g(struct osi_core_priv_data *osi_core, const char *buf)
+{
+	if (strncmp(buf, "SFI-10G", 7) == 0U) {
+                osi_core->phy_iface_mode = OSI_SFI_MODE_10G;
+        } else if (strncmp(buf, "10GBASE-CR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_CR_MODE_10G;
+        } else if (strncmp(buf, "10GBASE-KR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_KR_MODE_10G;
+        } else if (strncmp(buf, "10GBASE-SR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_SR_MODE_10G;
+        } else if (strncmp(buf, "10GBASE-LR", 10) == 0U) {
+                osi_core->phy_iface_mode = OSI_LR_MODE_10G;
+        } else if (strncmp(buf, "USXGMII-10G", 11) == 0U){
+		osi_core->phy_iface_mode = OSI_USXGMII_MODE_10G;
+	} else{
+		dev_err(osi_core->dev,
+                        "Invalid value passed. Valid values: 10GBASE-[CR KR SR LR]/USXGMII-10G/SFI-10G\n");
+	}
+}
+
+static void ether_phy_iface_mode_store_1g(struct osi_core_priv_data *osi_core, const char *buf)
+{
+	if (strncmp(buf, "SGMII-1G", 8) == 0U) {
+                osi_core->phy_iface_mode = OSI_SGMII_MODE_1G;
+        } else if (strncmp(buf, "1000BASE-KX", 11) == 0U) {
+                osi_core->phy_iface_mode = OSI_KX_MODE_1G;
+        } else if (strncmp(buf, "RGMII-1G", 8) == 0U) {
+                osi_core->phy_iface_mode = OSI_RGMII_MODE_1G;
+	} else{
+		dev_err(osi_core->dev,
+                        "Invalid value passed. Valid values: 1000BASE-KX/SGMII-1G/RGMII-1G\n");
+	}
+}
 /**
  * @brief Set the user setting of PHY iface mode.
  *
@@ -3361,18 +3439,31 @@ static ssize_t ether_phy_iface_mode_store(struct device *dev,
 		return size;
 	}
 
-	if (strncmp(buf, "XFI-10G", 7) == 0U) {
-		osi_core->phy_iface_mode = OSI_XFI_MODE_10G;
-	} else if (strncmp(buf, "XFI-5G", 6) == 0U) {
-		osi_core->phy_iface_mode = OSI_XFI_MODE_5G;
-	} else if (strncmp(buf, "USX-10G", 7) == 0U) {
-		osi_core->phy_iface_mode = OSI_USXGMII_MODE_10G;
-	} else if (strncmp(buf, "USX-5G", 6) == 0U) {
+
+	switch (osi_core->phy_gbe_mode) {
+        case OSI_GBE_MODE_25G:
+                ether_phy_iface_mode_store_25g(osi_core, buf);
+		break;
+        case OSI_GBE_MODE_10G:
+                ether_phy_iface_mode_store_10g(osi_core, buf);
+		break;
+        case OSI_GBE_MODE_5G:
 		osi_core->phy_iface_mode = OSI_USXGMII_MODE_5G;
-	} else {
-		dev_err(pdata->dev,
-			"Invalid value passed. Valid values are XFI-10G/XFI-5G/USX-10G/USX-5G\n");
-	}
+		break;
+        case OSI_GBE_MODE_2_5G:
+		osi_core->phy_iface_mode = OSI_USXGMII_MODE_2_5G;
+		break;
+	case OSI_GBE_MODE_1G:
+                ether_phy_iface_mode_store_1g(osi_core, buf);
+		break;
+        case OSI_GBE_MODE_100M:
+		osi_core->phy_iface_mode = OSI_RGMII_MODE_100M;
+		break;
+        default:
+		dev_err(pdata->dev, "Invalid value passed. default 0\n");
+		osi_core->phy_iface_mode = 0;
+		break;
+        }
 
 	return size;
 }
@@ -3396,7 +3487,7 @@ static DEVICE_ATTR(phy_iface_mode, (S_IRUGO | S_IWUSR),
  *
  * @note MAC and PHY need to be initialized.
  */
-static ssize_t ether_uphy_gbe_mode_show(struct device *dev,
+static ssize_t ether_phy_gbe_mode_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
@@ -3404,7 +3495,7 @@ static ssize_t ether_uphy_gbe_mode_show(struct device *dev,
 	struct ether_priv_data *pdata = netdev_priv(ndev);
 	struct osi_core_priv_data *osi_core = pdata->osi_core;
 
-	switch (osi_core->uphy_gbe_mode) {
+	switch (osi_core->phy_gbe_mode) {
 	case OSI_GBE_MODE_25G:
 		return scnprintf(buf, PAGE_SIZE, "25G\n");
 	case OSI_GBE_MODE_10G:
@@ -3432,7 +3523,7 @@ static ssize_t ether_uphy_gbe_mode_show(struct device *dev,
  *
  * @return size of buffer.
  */
-static ssize_t ether_uphy_gbe_mode_store(struct device *dev,
+static ssize_t ether_phy_gbe_mode_store(struct device *dev,
 					 struct device_attribute *attr,
 					 const char *buf, size_t size)
 {
@@ -3446,15 +3537,15 @@ static ssize_t ether_uphy_gbe_mode_store(struct device *dev,
 	}
 
 	if (strncmp(buf, "25G", 3) == 0U) {
-		osi_core->uphy_gbe_mode = OSI_GBE_MODE_25G;
+		osi_core->phy_gbe_mode = OSI_GBE_MODE_25G;
 	} else if (strncmp(buf, "10G", 3) == 0U) {
-		osi_core->uphy_gbe_mode = OSI_GBE_MODE_10G;
+		osi_core->phy_gbe_mode = OSI_GBE_MODE_10G;
 	} else if (strncmp(buf, "5G", 2) == 0U) {
-		osi_core->uphy_gbe_mode = OSI_GBE_MODE_5G;
+		osi_core->phy_gbe_mode = OSI_GBE_MODE_5G;
 	} else if (strncmp(buf, "2_5G", 4) == 0U) {
-		osi_core->uphy_gbe_mode = OSI_GBE_MODE_2_5G;
+		osi_core->phy_gbe_mode = OSI_GBE_MODE_2_5G;
 	} else if (strncmp(buf, "1G", 2) == 0U) {
-		osi_core->uphy_gbe_mode = OSI_GBE_MODE_1G;
+		osi_core->phy_gbe_mode = OSI_GBE_MODE_1G;
 	} else {
 		dev_err(pdata->dev,
 			"Invalid value passed. Valid values are 10G or 5G\n");
@@ -3467,9 +3558,9 @@ static ssize_t ether_uphy_gbe_mode_store(struct device *dev,
  * @brief Sysfs attribute for UPHY GBE Mode
  *
  */
-static DEVICE_ATTR(uphy_gbe_mode, (S_IRUGO | S_IWUSR),
-		   ether_uphy_gbe_mode_show,
-		   ether_uphy_gbe_mode_store);
+static DEVICE_ATTR(phy_gbe_mode, (S_IRUGO | S_IWUSR),
+		   ether_phy_gbe_mode_show,
+		   ether_phy_gbe_mode_store);
 
 /**
  * @brief Sysfs attribute for MAC loopback
@@ -4029,7 +4120,7 @@ static struct attribute *ether_sysfs_attrs[] = {
 	&dev_attr_macsec_dbg_events.attr,
 #endif /* DEBUG_MACSEC */
 #endif /* MACSEC_SUPPORT */
-	&dev_attr_uphy_gbe_mode.attr,
+	&dev_attr_phy_gbe_mode.attr,
 	&dev_attr_phy_iface_mode.attr,
 #ifdef ETHER_GRO
 	&dev_attr_nvgro_pkt_age_msec.attr,
@@ -4059,7 +4150,7 @@ static struct attribute *ether_sysfs_attrs_without_macsec[] = {
 	&dev_attr_ptp_mode.attr,
 	&dev_attr_ptp_sync.attr,
 	&dev_attr_frp.attr,
-	&dev_attr_uphy_gbe_mode.attr,
+	&dev_attr_phy_gbe_mode.attr,
 	&dev_attr_phy_iface_mode.attr,
 #ifdef ETHER_GRO
 	&dev_attr_nvgro_pkt_age_msec.attr,

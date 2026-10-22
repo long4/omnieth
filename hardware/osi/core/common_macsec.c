@@ -21,10 +21,9 @@
  */
 
 #ifdef MACSEC_SUPPORT
-#include <osi_macsec.h>
 #include "common.h"
-#include "eqos_core.h"
 #include "core_local.h"
+#include <osi_macsec.h>
 
 /**
  * @brief osi_init_macsec_ops - macsec initialize operations
@@ -121,33 +120,15 @@ s32 osi_macsec_init(struct osi_core_priv_data *const osi_core,
 	if ((osi_core != OSI_NULL) && (l_core->macsec_ops != OSI_NULL) &&
 	    (l_core->macsec_ops->init != OSI_NULL) &&
 	    (macsec_vf_mac != OSI_NULL)) {
-		mac_addr = osi_core->base;
+		mac_addr = osi_core->mac_base;
 #ifdef OSI_RM_FTRACE
 		ethernet_server_entry_log();
 #endif
 		if (osi_core->use_virtualization != OSI_ENABLE) {
 			/* Update MAC value as per macsec requirement */
 			l_core->ops_p->macsec_config_mac(osi_core, OSI_ENABLE);
-			#if 0
-			if (osi_core->mac_ver == OSI_EQOS_MAC_5_40) {
-				value = osi_readla(osi_core, (u8 *)mac_addr + EQOS_MAC_MCR);
-				/* Disable MAC Transmit as per suggestion in bug 4456073 */
-				value &= ~EQOS_MCR_TE;
-				osi_writela(osi_core, value, (u8 *)mac_addr + EQOS_MAC_MCR);
-			}
-			#endif
 		}
 		ret = l_core->macsec_ops->init(osi_core, mtu, macsec_vf_mac);
-		if (osi_core->use_virtualization != OSI_ENABLE) {
-			#if 0 
-			if (osi_core->mac_ver == OSI_EQOS_MAC_5_40) {
-				value = osi_readla(osi_core, (u8 *)mac_addr + EQOS_MAC_MCR);
-				/* Enable MAC Transmit as per suggestion in bug 4456073 */
-				value |= EQOS_MCR_TE;
-				osi_writela(osi_core, value, (u8 *)mac_addr + EQOS_MAC_MCR);
-			}
-			#endif
-		}
 
 #ifdef OSI_RM_FTRACE
 		ethernet_server_exit_log();
@@ -691,8 +672,7 @@ s32 osi_macsec_config_dbg_buf(
 
 	if ((osi_core != OSI_NULL) && (l_core->macsec_ops != OSI_NULL) &&
 	    (l_core->macsec_ops->dbg_buf_config != OSI_NULL) &&
-	    (dbg_buf_config != OSI_NULL) &&
-	    (osi_core->macsec != OSI_MACSEC_T26X)) {
+	    (dbg_buf_config != OSI_NULL)) {
 		ret = l_core->macsec_ops->dbg_buf_config(osi_core,
 							dbg_buf_config);
 	}
@@ -733,8 +713,7 @@ s32 osi_macsec_dbg_events_config(
 
 	if ((osi_core != OSI_NULL) && (l_core->macsec_ops != OSI_NULL) &&
 	    (l_core->macsec_ops->dbg_events_config != OSI_NULL) &&
-	    (dbg_buf_config != OSI_NULL) &&
-	    (osi_core->macsec != OSI_MACSEC_T26X)) {
+	    (dbg_buf_config != OSI_NULL)) {
 		ret = l_core->macsec_ops->dbg_events_config(osi_core,
 							dbg_buf_config);
 	}

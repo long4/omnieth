@@ -88,6 +88,9 @@
 #define MULTIPLIER_32			32
 #define MULTIPLIER_8			8
 #define MULTIPLIER_4			4
+
+#define ETHER_MAX_QUEUE			16
+
 /**
  * @brief Max number of Ethernet IRQs supported in HW
  */
@@ -96,10 +99,7 @@
  * @brief Maximum index for IRQ numbers array.
  */
 #define ETHER_IRQ_MAX_IDX		9
-/**
- * @brief Size of Ethernet IRQ name.
- */
-#define ETHER_IRQ_NAME_SZ		32
+
 /**
  * @brief CPU to handle ethernet common interrupt
  */
@@ -285,6 +285,64 @@
 /** @} */
 
 #define ETHER_INVALID_CHAN_NUM		0xFFU
+
+#define OSD_ERR(fmt, ...)				\
+{								\
+	pr_err(fmt, ##__VA_ARGS__);	\
+}
+
+#define OSD_DEV_ERR(dev, fmt, ...)				\
+{								\
+	dev_err(dev, fmt, ##__VA_ARGS__);	\
+}
+
+#ifdef INFO_OSD
+
+#define OSD_INFO(fmt, ...)				\
+{								\
+	pr_info(fmt, ##__VA_ARGS__);\
+}
+
+#define OSD_DEV_INFO(dev, fmt, ...)				\
+{								\
+	dev_info(dev, fmt, ##__VA_ARGS__);\
+}
+
+#define OSD_NDEV_INFO(dev, fmt, ...)				\
+{								\
+	netdev_info(dev, fmt, ##__VA_ARGS__);\
+}
+
+#else
+
+#define OSD_INFO(fmt, ...)
+#define OSD_DEV_INFO(dev, fmt, ...)
+#define OSD_NDEV_INFO(dev, fmt, ...)
+
+#endif
+
+#ifdef DBG_OSD
+#define OSD_DEBUG(fmt, ...)				\
+{								\
+	pr_info(fmt, ##__VA_ARGS__);\
+}
+
+#define OSD_DEV_DEBUG(dev, fmt, ...)				\
+{								\
+	dev_info(priv, fmt, ##__VA_ARGS__);\
+}
+
+#define OSD_NDEV_DEBUG(dev, fmt, ...)				\
+{								\
+	netdev_info(dev, fmt, ##__VA_ARGS__);\
+}
+#else
+#define OSD_DEBUG(fmt, ...)
+#define OSD_DEV_DEBUG(dev, fmt, ...)
+#define OSD_NDEV_DEBUG(dev, fmt, ...)
+#endif /* DBG_OSD */
+
+
 /**
  * @brief Check if Tx data buffer length is within bounds.
  *
@@ -353,7 +411,11 @@ static inline int ether_avail_txdesc_cnt(struct osi_dma_priv_data *osi_dma,
  * and store locally. If data is at line rate, 2^32 entry get will filled in
  * 36 second for 1 G interface and 3.6 sec for 10 G interface.
  */
+#ifdef FOR_QEMU
+#define ETHER_STATS_TIMER		60000U
+#else
 #define ETHER_STATS_TIMER		3000U
+#endif
 
 /**
  * @brief Timer to trigger Work queue periodically which read TX timestamp
@@ -393,6 +455,16 @@ struct ether_rx_napi {
 	struct ether_priv_data *pdata;
 	/** NAPI instance associated with transmit channel */
 	struct napi_struct napi;
+};
+
+/**
+ * @brief VM Based IRQ data
+ */
+struct ether_mac_irq_data {
+	/** List of DMA Tx/Rx channel mask */
+	mac_irq_t irq_id;
+	/** OSD private data */
+	struct ether_priv_data *pdata;
 };
 
 /**
@@ -575,19 +647,19 @@ struct ether_priv_data {
 	/** Common IRQ alloc mask */
 	unsigned int common_irq_alloc_mask;
 	/** Common IRQ number for MAC */
-	int common_irq;
+	int mac_irqs[MAC_IRQ_MAX];
+	struct ether_mac_irq_data mac_irq_data[MAC_IRQ_MAX];
+	char ** mac_irq_names;
+	int mac_irq_count;
+	int tx_irqs[ETHER_MAX_QUEUE];
+	int rx_irqs[ETHER_MAX_QUEUE];
+
 	/** CPU affinity mask for Common IRQ */
 	cpumask_t common_isr_cpu_mask;
 	/** CPU ID for handling Common IRQ */
 	unsigned int common_isr_cpu_id;
-	/** Array of DMA Transmit channel IRQ numbers */
-	int tx_irqs[ETHER_MAX_IRQS];
-	/** Array of DMA Receive channel IRQ numbers */
-	int rx_irqs[ETHER_MAX_IRQS];
-	/** Array of VM IRQ numbers */
-	int vm_irqs[OSI_MAX_VM_IRQS];
-	/** IRQ name */
-	char irq_names[ETHER_IRQ_MAX_IDX][ETHER_IRQ_NAME_SZ];
+
+	int vm_irqs[OSI_MAX_VM_IRQS];	
 	/** memory allocation mask */
 	unsigned long long dma_mask;
 	/** Current state of features enabled in HW*/

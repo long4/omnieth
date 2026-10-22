@@ -20,14 +20,12 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include "common.h"
 #include <osi_common.h>
 #include <osi_core.h>
 #include <ivc_core.h>
 #include <osi_macsec.h>
-#include "eqos_core.h"
-#include "eqos_mmc.h"
 #include "core_local.h"
-#include "common.h"
 
 /**
  * @brief ivc_handle_ioctl - marshell input argument to handle runtime command
@@ -498,8 +496,8 @@ done:
 static void ivc_macsec_handle_irq(OSI_UNUSED
 				    struct osi_core_priv_data *const osi_core)
 {
-	OSI_CORE_INFO((osi_core->osd), (OSI_LOG_ARG_INVALID),
-		      ("Nothing to handle\n"), (0ULL));
+	OSI_CORE_INFO((osi_core->osd), 
+		      ("Nothing to handle\n"));
 }
 
 /**

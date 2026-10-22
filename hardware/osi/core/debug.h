@@ -25,9 +25,9 @@
 #ifndef INCLUDED_CORE_DEBUG_H
 #define INCLUDED_CORE_DEBUG_H
 
+#include "common.h"
 #include <osi_core.h>
 #include <osi_macsec.h>
-#include "common.h"
 #include "core_local.h"
 
 void core_reg_dump(struct osi_core_priv_data *osi_core);

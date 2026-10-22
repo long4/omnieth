@@ -31,25 +31,9 @@
 #endif /* OSI_DEBUG */
 #include "hw_common.h"
 
-/** \cond DO_NOT_DOCUMENT */
-/**
- * @brief g_dma - DMA local data array.
- */
-
-/**
- * @brief g_ops - local DMA HW operations array.
- */
-
-typedef s32 (*dma_intr_fn)(struct osi_dma_priv_data const *osi_dma,
-			       u32 intr_ctrl, u32 intr_status,
-			       u32 dma_status, u32 val);
-static inline s32 enable_intr(struct osi_dma_priv_data const *osi_dma,
-				  u32 intr_ctrl, u32 intr_status,
-				  u32 dma_status, u32 val);
-static inline s32 disable_intr(struct osi_dma_priv_data const *osi_dma,
-				  u32 intr_ctrl, u32 intr_status,
-				  u32 dma_status, u32 val);
-static dma_intr_fn intr_fn[2] = { disable_intr, enable_intr };
+#ifdef DBG_OSI
+u64 dma_base;
+#endif
 
 static inline u32 set_pos_val(u32 val, u32 pos_val)
 {
@@ -61,62 +45,30 @@ static inline u32 clear_pos_val(u32 val, u32 pos_val)
 	return (val & ~pos_val);
 }
 
-static inline s32 intr_en_dis_retry(u8 *base, u32 intr_ctrl,
-					u32 val, u32 en_dis)
+static inline s32 dma_enable_intr(struct osi_dma_priv_data const *osi_dma,	u32 chn, u32 mode)
 {
-	typedef u32 (*set_clear)(u32 val, u32 pos);
-	const set_clear set_clr[2] = { clear_pos_val, set_pos_val };
-	u32 cntrl1, cntrl2, i;
-	s32 ret = -1;
-
-	for (i = 0U; i < 10U; i++) {
-		cntrl1 = osi_dma_readl(base + intr_ctrl);
-		cntrl1 = set_clr[en_dis](cntrl1, val);
-		osi_dma_writel(cntrl1, base + intr_ctrl);
-
-		cntrl2 = osi_dma_readl(base + intr_ctrl);
-		if (cntrl1 == cntrl2) {
-			ret = 0;
-			break;
-		} else {
-			continue;
-		}
+	int bit_mask = 0;
+	if(mode == OSI_DMA_CH_TX_INTR){
+		bit_mask = DMA_CHX_INTR_TIE;
+	} else{
+		bit_mask = DMA_CHX_INTR_RIE;
 	}
 
-	return ret;
+	return osi_dma_setbit_safe(bit_mask, (u8*)osi_dma->base + MGBE_DMA_CHX_INTR_ENA(chn));
 }
 
-static inline s32 enable_intr(struct osi_dma_priv_data const *osi_dma,
-				  u32 intr_ctrl, OSI_UNUSED u32 intr_status,
-				  OSI_UNUSED u32 dma_status, u32 val)
+static inline s32 dma_disable_intr(struct osi_dma_priv_data const *osi_dma, u32 chn, u32 mode)
 {
-	(void)intr_status; // unused
-	(void)dma_status; // unused
-	return intr_en_dis_retry((u8 *)osi_dma->base, intr_ctrl,
-				 val, OSI_DMA_INTR_ENABLE);
-}
-
-static inline s32 disable_intr(struct osi_dma_priv_data const *osi_dma,
-				  u32 intr_ctrl, u32 intr_status,
-				  u32 dma_status, u32 val)
-{
-	u8 *base = (u8 *)osi_dma->base;
-	const u32 status_val[4] = {
-		0,
-		EQOS_DMA_CHX_STATUS_CLEAR_TX,
-		EQOS_DMA_CHX_STATUS_CLEAR_RX,
-		0,
-	};
-	u32 status;
-
-	status = osi_dma_readl(base + intr_status);
-	if ((status & val) == val) {
-		osi_dma_writel(status_val[val], base + dma_status);
-		osi_dma_writel(val, base + intr_status);
+    u32 intr_bit_mask, status_bit_mask;
+	if(mode == OSI_DMA_CH_TX_INTR){
+		intr_bit_mask = DMA_CHX_INTR_TIE;
+		status_bit_mask = DMA_CHX_INTR_TIE | DMA_CHX_INTR_NIS;
+	} else{
+		intr_bit_mask = DMA_CHX_INTR_RIE;
+		status_bit_mask = DMA_CHX_INTR_RIE | DMA_CHX_INTR_NIS;
 	}
-
-	return intr_en_dis_retry((u8 *)osi_dma->base, intr_ctrl,
-				 val, OSI_DMA_INTR_DISABLE);
+	osi_dma_writel(status_bit_mask, (u8 *)osi_dma->base + MGBE_DMA_CHX_STATUS(chn));
+	return osi_dma_clearbit_safe(intr_bit_mask, (u8*)osi_dma->base + MGBE_DMA_CHX_INTR_ENA(chn));
 }
 
 struct osi_dma_priv_data *osi_get_dma(void)
@@ -226,8 +178,7 @@ static inline s32 validate_dma_chan_num(struct osi_dma_priv_data *osi_dma,
 	s32 ret = 0;
 
 	if (chan >= l_dma->num_max_chans) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				"Invalid DMA channel number\n", chan);
+		OSI_DMA_ERR(osi_dma->osd, "Invalid DMA channel number\n", chan);
 		ret = -1;
 	}
 
@@ -256,8 +207,7 @@ static inline s32 validate_dma_chans(struct osi_dma_priv_data *osi_dma)
 
 	for (i = 0; i < osi_dma->num_dma_chans; i++) {
 		if (osi_dma->dma_chans[i] > l_dma->num_max_chans) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "Invalid DMA channel number:\n",
+			OSI_DMA_ERR(osi_dma->osd, "Invalid DMA channel number:\n",
 				    osi_dma->dma_chans[i]);
 			ret = -1;
 		}
@@ -287,8 +237,7 @@ static inline s32 validate_coe_dma_chans(struct osi_dma_priv_data *osi_dma)
 	s32 ret = 0;
 	for (i = 0; i < osi_dma->num_dma_chans_coe; i++) {
 		if (osi_dma->dma_chans_coe[i] > l_dma->num_max_chans) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "Invalid CoE DMA channel number:\n",
+			OSI_DMA_ERR(osi_dma->osd, "Invalid CoE DMA channel number:\n",
 				    osi_dma->dma_chans_coe[i]);
 			ret = -1;
 		}
@@ -322,16 +271,14 @@ static s32 validate_func_ptrs(struct osi_dma_priv_data *osi_dma,
 #elif __SIZEOF_POINTER__ == 4
 	u32 *l_ops = (u32 *)temp_ops;
 #else
-	OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-		    "DMA: Undefined architecture\n", 0ULL);
+	OSI_DMA_ERR(osi_dma->osd, "DMA: Undefined architecture\n");
 	return -1;
 #endif
 	(void) osi_dma;
 
 	for (i = 0; i < (sizeof(*ops_p) / (u64)__SIZEOF_POINTER__); i++) {
 		if (*l_ops == 0U) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "dma: fn ptr validation failed at\n",
+			OSI_DMA_ERR(osi_dma->osd, "dma: fn ptr validation failed at\n",
 				    (u64)i);
 			return -1;
 		}
@@ -346,12 +293,10 @@ static s32 validate_func_ptrs(struct osi_dma_priv_data *osi_dma,
 static s32 validate_ring_sz(const struct osi_dma_priv_data *osi_dma)
 {
 	const u32 default_rz[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DEFAULT_RING_SZ,
 		MGBE_DEFAULT_RING_SZ,
 		MGBE_DEFAULT_RING_SZ
 	};
 	const u32 max_rz[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DEFAULT_RING_SZ,
 		MGBE_MAX_RING_SZ,
 		MGBE_MAX_RING_SZ
 	};
@@ -361,8 +306,7 @@ static s32 validate_ring_sz(const struct osi_dma_priv_data *osi_dma)
 	    (is_power_of_two(osi_dma->tx_ring_sz) == 0U) ||
 	    (osi_dma->tx_ring_sz < HW_MIN_RING_SZ) ||
 	    (osi_dma->tx_ring_sz > default_rz[osi_dma->mac])) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA: Invalid Tx ring size:\n",
+		OSI_DMA_ERR(osi_dma->osd, "DMA: Invalid Tx ring size:%u\n",
 			     osi_dma->tx_ring_sz);
 		ret = -1;
 		goto fail;
@@ -372,9 +316,8 @@ static s32 validate_ring_sz(const struct osi_dma_priv_data *osi_dma)
 	    (is_power_of_two(osi_dma->rx_ring_sz) == 0U) ||
 	    (osi_dma->rx_ring_sz < HW_MIN_RING_SZ) ||
 	    (osi_dma->rx_ring_sz > max_rz[osi_dma->mac])) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA: Invalid Rx ring size:\n",
-			     osi_dma->tx_ring_sz);
+		OSI_DMA_ERR(osi_dma->osd, "DMA: Invalid Rx ring size:%u\n",
+			     osi_dma->rx_ring_sz);
 		ret = -1;
 		goto fail;
 	}
@@ -390,10 +333,8 @@ static s32 validate_osd_ops_params(struct osi_dma_priv_data *osi_dma)
 	if ((osi_dma->is_ethernet_server != OSI_ENABLE) &&
 	    ((osi_dma->osd_ops.transmit_complete == OSI_NULL) ||
 	    (osi_dma->osd_ops.receive_packet == OSI_NULL) ||
-	    (osi_dma->osd_ops.ops_log == OSI_NULL) ||
-#ifdef OSI_DEBUG
-	    (osi_dma->osd_ops.printf == OSI_NULL) ||
-#endif /* OSI_DEBUG */
+	    (osi_dma->osd_ops.log == OSI_NULL) ||
+	    (osi_dma->osd_ops.dbg == OSI_NULL) ||
 	    (osi_dma->osd_ops.udelay == OSI_NULL))) {
 		ret = -1;
 	}
@@ -411,8 +352,7 @@ static s32 validate_dma_ops_params(struct osi_dma_priv_data *osi_dma)
 		goto fail;
 	}
 	if (osi_dma->mac > OSI_MAC_HW_MGBE_T26X) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA: Invalid MAC HW type\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "DMA: Invalid MAC HW type\n");
 		ret = -1;
 		goto fail;
 	}
@@ -440,7 +380,7 @@ s32 osi_init_dma_ops(struct osi_dma_priv_data *osi_dma)
 #ifndef OSI_STRIPPED_LIB
 	typedef void (*init_ops_arr)(struct dma_chan_ops *temp);
 	const init_ops_arr i_ops[OSI_MAX_MAC_IP_TYPES] = {
-		eqos_init_dma_chan_ops, mgbe_init_dma_chan_ops,
+		mgbe_init_dma_chan_ops,
 		mgbe_init_dma_chan_ops
 	};
 #endif
@@ -462,8 +402,7 @@ s32 osi_init_dma_ops(struct osi_dma_priv_data *osi_dma)
 
 #ifndef OSI_STRIPPED_LIB
 	if (validate_func_ptrs(osi_dma, &dma_gops[osi_dma->mac]) < 0) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA ops validation failed\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "DMA ops validation failed\n");
 		ret = -1;
 		goto fail;
 	}
@@ -488,8 +427,7 @@ static s32 vdma_to_pdma_map(const struct osi_dma_priv_data *const osi_dma,
 	u32 found = 0U;
 
 	if (pdma_chan == OSI_NULL) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "pdma_chan is NULL\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "pdma_chan is NULL\n");
 		goto done;
 	}
 
@@ -510,25 +448,22 @@ static s32 vdma_to_pdma_map(const struct osi_dma_priv_data *const osi_dma,
 	}
 
 	if (found == 0U) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_HW_FAIL,
-		    "vdma mapped to pdma not found, vdma", vdma_chan);
+		OSI_DMA_ERR(osi_dma->osd, "vdma mapped to pdma not found, vdma_chan:%u", vdma_chan);
 	}
 done:
 	return ret;
 }
 static inline void start_dma(const struct osi_dma_priv_data *const osi_dma, u32 dma_chan)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	const u32 local_mac = osi_dma->mac % OSI_MAX_MAC_IP_TYPES;
 	// Added bitwise with 0xFF to avoid CERT INT30-C error
 	u32 chan = ((dma_chan & chan_mask[local_mac]) & (0xFFU));
 	const u32 tx_dma_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_TX_CTRL(chan),
 		MGBE_DMA_CHX_TX_CTRL(chan),
 		MGBE_DMA_CHX_TX_CTRL(chan)
 	};
 	const u32 rx_dma_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RX_CTRL(chan),
 		MGBE_DMA_CHX_RX_CTRL(chan),
 		MGBE_DMA_CHX_RX_CTRL(chan)
 	};
@@ -549,17 +484,15 @@ static inline void start_dma(const struct osi_dma_priv_data *const osi_dma, u32 
 static inline void stop_dma(const struct osi_dma_priv_data *const osi_dma,
 			    u32 dma_chan)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	const u32 local_mac = osi_dma->mac % OSI_MAX_MAC_IP_TYPES;
 	// Added bitwise with 0xFF to avoid CERT INT30-C error
 	u32 chan = ((dma_chan & chan_mask[local_mac]) & (0xFFU));
 	const u32 dma_tx_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_TX_CTRL(chan),
 		MGBE_DMA_CHX_TX_CTRL(chan),
 		MGBE_DMA_CHX_TX_CTRL(chan)
 	};
 	const u32 dma_rx_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RX_CTRL(chan),
 		MGBE_DMA_CHX_RX_CTRL(chan),
 		MGBE_DMA_CHX_RX_CTRL(chan)
 	};
@@ -580,7 +513,7 @@ static inline void stop_dma(const struct osi_dma_priv_data *const osi_dma,
 static s32 init_dma_channel(const struct osi_dma_priv_data *const osi_dma,
 			     u32 dma_chan)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	u32 pbl = 0;
 	u32 pdma_chan = 0xFFU;
 	const u32 local_mac = osi_dma->mac % OSI_MAX_MAC_IP_TYPES;
@@ -589,64 +522,55 @@ static s32 init_dma_channel(const struct osi_dma_priv_data *const osi_dma,
 	u32 riwt = osi_dma->rx_riwt & 0xFFFU;
 	const u32 total_num_chans = osi_dma->num_dma_chans + osi_dma->num_dma_chans_coe;
 	const u32 intr_en_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_INTR_ENA(chan),
 		MGBE_DMA_CHX_INTR_ENA(chan),
 		MGBE_DMA_CHX_INTR_ENA(chan)
 	};
 	const u32 chx_ctrl_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_CTRL(chan),
 		MGBE_DMA_CHX_CTRL(chan),
 		MGBE_DMA_CHX_CTRL(chan)
 	};
 	const u32 tx_ctrl_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_TX_CTRL(chan),
 		MGBE_DMA_CHX_TX_CTRL(chan),
 		MGBE_DMA_CHX_TX_CTRL(chan),
 	};
 	const u32 rx_ctrl_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RX_CTRL(chan),
 		MGBE_DMA_CHX_RX_CTRL(chan),
 		MGBE_DMA_CHX_RX_CTRL(chan)
 	};
 	const u32 rx_wdt_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RX_WDT(chan),
 		MGBE_DMA_CHX_RX_WDT(chan),
 		MGBE_DMA_CHX_RX_WDT(chan)
 	};
 	u32 tx_pbl[2] = {
-		EQOS_DMA_CHX_TX_CTRL_TXPBL_RECOMMENDED,
+		MGBE_DMA_CHX_TX_CTRL_TXPBL_RECOMMENDED,
 		MGBE_DMA_CHX_TX_CTRL_TXPBL_RECOMMENDED
 	};
 	const u32 rx_pbl[2] = {
-		EQOS_DMA_CHX_RX_CTRL_RXPBL_RECOMMENDED,
+		((Q_SZ_DEPTH(MGBE_RXQ_SIZE/OSI_MGBE_MAX_NUM_QUEUES) /
+		total_num_chans) / 2U),
 		((Q_SZ_DEPTH(MGBE_RXQ_SIZE/OSI_MGBE_MAX_NUM_QUEUES) /
 		total_num_chans) / 2U)
 	};
 	const u32 rwt_val[OSI_MAX_MAC_IP_TYPES] = {
-		(((riwt * (EQOS_AXI_CLK_FREQ / OSI_ONE_MEGA_HZ)) /
-		  EQOS_DMA_CHX_RX_WDT_RWTU) & EQOS_DMA_CHX_RX_WDT_RWT_MASK),
 		(((riwt * ((u32)MGBE_AXI_CLK_FREQ / OSI_ONE_MEGA_HZ)) /
 		 MGBE_DMA_CHX_RX_WDT_RWTU) & MGBE_DMA_CHX_RX_WDT_RWT_MASK),
 		(((riwt * ((u32)MGBE_AXI_CLK_FREQ / OSI_ONE_MEGA_HZ)) /
 		 MGBE_DMA_CHX_RX_WDT_RWTU) & MGBE_DMA_CHX_RX_WDT_RWT_MASK)
 	};
 	const u32 rwtu_val[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RX_WDT_RWTU_512_CYCLE,
 		MGBE_DMA_CHX_RX_WDT_RWTU_2048_CYCLE,
 		MGBE_DMA_CHX_RX_WDT_RWTU_2048_CYCLE
 	};
 	const u32 rwtu_mask[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RX_WDT_RWTU_MASK,
 		MGBE_DMA_CHX_RX_WDT_RWTU_MASK,
 		MGBE_DMA_CHX_RX_WDT_RWTU_MASK
 	};
 	const u32 osp_tse[OSI_MAX_MAC_IP_TYPES] = {
 		(DMA_CHX_TX_CTRL_OSP | DMA_CHX_TX_CTRL_TSE),
-		(DMA_CHX_TX_CTRL_OSP | DMA_CHX_TX_CTRL_TSE),
 		DMA_CHX_TX_CTRL_TSE
 	};
 	const u32 owrq = (MGBE_DMA_CHX_RX_CNTRL2_OWRQ_MCHAN / total_num_chans);
-	const u32 owrq_arr[OSI_MGBE_T23X_MAX_NUM_CHANS] = {
+	const u32 owrq_arr[OSI_MGBE_OB01_MAX_NUM_CHANS] = {
 		MGBE_DMA_CHX_RX_CNTRL2_OWRQ_SCHAN, owrq, owrq, owrq,
 		owrq, owrq, owrq, owrq, owrq, owrq
 	};
@@ -658,8 +582,7 @@ static s32 init_dma_channel(const struct osi_dma_priv_data *const osi_dma,
 	val |= (DMA_CHX_INTR_TIE | DMA_CHX_INTR_RIE);
 	osi_dma_writel(val, (u8 *)osi_dma->base + intr_en_reg[osi_dma->mac]);
 
-	if ((osi_dma->mac == OSI_MAC_HW_MGBE) ||
-		 (osi_dma->mac == OSI_MAC_HW_EQOS)) {
+	if (osi_dma->mac == OSI_MAC_HW_MGBE) {
 		/* Enable PBLx8 */
 		val = osi_dma_readl((u8 *)osi_dma->base +
 				chx_ctrl_reg[osi_dma->mac]);
@@ -690,9 +613,7 @@ static s32 init_dma_channel(const struct osi_dma_priv_data *const osi_dma,
 	val |= osp_tse[osi_dma->mac];
 	val |= (DMA_CHX_TX_CTRL_OSP | DMA_CHX_TX_CTRL_TSE);
 
-	if (osi_dma->mac == OSI_MAC_HW_EQOS) {
-		val |= tx_pbl[osi_dma->mac];
-	} else if (osi_dma->mac == OSI_MAC_HW_MGBE) {
+	if (osi_dma->mac == OSI_MAC_HW_MGBE) {
 		/*
 		 * Formula for TxPBL calculation is
 		 * (TxPBL) < ((TXQSize - MTU)/(DATAWIDTH/8)) - 5
@@ -720,9 +641,7 @@ static s32 init_dma_channel(const struct osi_dma_priv_data *const osi_dma,
 	 * unwanted length data.
 	 **/
 	val |= ((osi_dma->rx_buf_len - 30U) << DMA_CHX_RBSZ_SHIFT);
-	if (osi_dma->mac == OSI_MAC_HW_EQOS) {
-		val |= rx_pbl[osi_dma->mac];
-	} else if (osi_dma->mac == OSI_MAC_HW_MGBE){
+	if (osi_dma->mac == OSI_MAC_HW_MGBE){
 		pbl = osi_valid_pbl_value(rx_pbl[osi_dma->mac]);
 		val |= (pbl << MGBE_DMA_CHX_CTRL_PBL_SHIFT);
 	} else if (osi_dma->mac == OSI_MAC_HW_MGBE_T26X) {
@@ -781,7 +700,7 @@ exit_func:
 
 static s32 init_dma(const struct osi_dma_priv_data *osi_dma, u32 channel)
 {
-	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0xFU, 0x3FU};
+	const u32 chan_mask[OSI_MAX_MAC_IP_TYPES] = {0xFU, 0x3FU};
 	const u32 local_mac = osi_dma->mac % OSI_MAX_MAC_IP_TYPES;
 	// Added bitwise with 0xFF to avoid CERT INT30-C error
 	u32 chan = ((channel & chan_mask[local_mac]) & (0xFFU));
@@ -791,32 +710,9 @@ static s32 init_dma(const struct osi_dma_priv_data *osi_dma, u32 channel)
 	if (osi_dma->num_dma_chans != 0U) {
 		ret = init_dma_channel(osi_dma, chan);
 		if (ret < 0) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			   	    "DMA: Init DMA channel failed\n", 0ULL);
+			OSI_DMA_ERR(osi_dma->osd, "DMA: Init DMA channel failed\n");
 			goto fail;
 		}
-	}
-
-	ret = intr_fn[OSI_DMA_INTR_ENABLE](osi_dma, VIRT_INTR_CHX_CNTRL(chan),
-					   VIRT_INTR_CHX_STATUS(chan),
-					   ((osi_dma->mac > OSI_MAC_HW_EQOS) ?
-					   MGBE_DMA_CHX_STATUS(chan) : EQOS_DMA_CHX_STATUS(chan)),
-					   OSI_BIT(OSI_DMA_CH_TX_INTR));
-	if (ret < 0) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA: Enable Tx interrupt failed\n", 0ULL);
-		goto fail;
-	}
-
-	ret = intr_fn[OSI_DMA_INTR_ENABLE](osi_dma, VIRT_INTR_CHX_CNTRL(chan),
-					   VIRT_INTR_CHX_STATUS(chan),
-					   ((osi_dma->mac > OSI_MAC_HW_EQOS) ?
-					   MGBE_DMA_CHX_STATUS(chan) : EQOS_DMA_CHX_STATUS(chan)),
-					   OSI_BIT(OSI_DMA_CH_RX_INTR));
-	if (ret < 0) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA: Enable Rx interrupt failed\n", 0ULL);
-		goto fail;
 	}
 
 	start_dma(osi_dma, chan);
@@ -854,8 +750,7 @@ s32 osi_hw_dma_init(struct osi_dma_priv_data *osi_dma)
 	if (validate_dma_mac_ver_update_chans(osi_dma->mac, l_dma->mac_ver,
 			       		      &l_dma->num_max_chans,
 					      &l_dma->l_mac_ver) == 0) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid MAC version\n", (u64)l_dma->mac_ver);
+		OSI_DMA_ERR(osi_dma->osd, "Invalid MAC version：0x%llx\n", (u64)l_dma->mac_ver);
 		ret = -1;
 		goto fail;
 	}
@@ -863,16 +758,14 @@ s32 osi_hw_dma_init(struct osi_dma_priv_data *osi_dma)
 	if ((osi_dma->num_dma_chans == 0U) ||
 	    (osi_dma->num_dma_chans > l_dma->num_max_chans) ||
 	    (osi_dma->num_dma_chans_coe > l_dma->num_max_chans)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid number of DMA channels\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "Invalid number of DMA channels\n");
 		ret = -1;
 		goto fail;
 	}
 
 	if ((validate_dma_chans(osi_dma) < 0) ||
 	    (validate_coe_dma_chans(osi_dma) < 0)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA channels validation failed\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "DMA channels validation failed\n");
 		ret = -1;
 		goto fail;
 	}
@@ -894,8 +787,7 @@ s32 osi_hw_dma_init(struct osi_dma_priv_data *osi_dma)
 	for (i = 0; i < osi_dma->num_dma_chans_coe; i++) {
 		ret = init_dma_channel(osi_dma, osi_dma->dma_chans_coe[i]);
 		if (ret < 0) {
-			OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-				    "DMA: Init CoE DMA channel failed\n", 0ULL);
+			OSI_DMA_ERR(osi_dma->osd, "DMA: Init CoE DMA channel failed\n");
 			goto fail;
 		}
 
@@ -916,7 +808,6 @@ static inline void set_rx_riit_dma(
 {
 	const u32 local_chan = chan % OSI_MGBE_MAX_NUM_CHANS;
 	const u32 rx_wdt_reg[OSI_MAX_MAC_IP_TYPES] = {
-		EQOS_DMA_CHX_RX_WDT(local_chan),
 		MGBE_DMA_CHX_RX_WDT(local_chan),
 		MGBE_DMA_CHX_RX_WDT(local_chan)
 	};
@@ -927,8 +818,7 @@ static inline void set_rx_riit_dma(
 	u32 val;
 
 	if (riit > (UINT_MAX / freq_mghz)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid riit received\n", riit);
+		OSI_DMA_ERR(osi_dma->osd, "Invalid riit received:%u\n", riit);
 		goto exit_func;
 	}
 
@@ -966,15 +856,13 @@ static inline void set_rx_riit(
 	if (found != OSI_ENABLE) {
 		/* use default ~1us value */
 		riit = MGBE_DMA_CHX_RX_WDT_ITW_DEFAULT;
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid speed value, using default riit 1us\n",
+		OSI_DMA_ERR(osi_dma->osd, "Invalid speed value:%u, using default riit 1us\n",
 			    speed);
 	}
 
 	/* riit is in nsec */
 	if ((riit  > (osi_dma->rx_riwt * OSI_MSEC_PER_SEC))) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid riit value, using default 1us\n", riit);
+		OSI_DMA_ERR(osi_dma->osd, "Invalid riit value:%u, using default 1us\n", riit);
 	}
 
 	for (i = 0; i < osi_dma->num_dma_chans; i++) {
@@ -1007,16 +895,14 @@ s32 osi_hw_dma_deinit(struct osi_dma_priv_data *osi_dma)
 
 	if ((osi_dma->num_dma_chans > l_dma->num_max_chans) ||
 	    (osi_dma->num_dma_chans_coe > l_dma->num_max_chans)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid number of DMA channels\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "Invalid number of DMA channels\n");
 		ret = -1;
 		goto fail;
 	}
 
 	if ((validate_dma_chans(osi_dma) < 0) ||
 	    (validate_coe_dma_chans(osi_dma) < 0)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA channels validation failed\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "DMA channels validation failed\n");
 		ret = -1;
 		goto fail;
 	}
@@ -1039,13 +925,13 @@ fail:
 #ifdef OSI_CL_FTRACE
 u32 osi_get_global_dma_status_cnt = 0;
 #endif /* OSI_CL_FTRACE */
+
 s32 osi_get_global_dma_status(struct osi_dma_priv_data *osi_dma,
 						   u32 *const dma_status)
 {
-	const u32 global_dma_status_reg_cnt[OSI_MAX_MAC_IP_TYPES] = {1, 1, 3};
+	const u32 global_dma_status_reg_cnt[OSI_MAX_MAC_IP_TYPES] = {1, 3};
 	struct dma_local *l_dma = (struct dma_local *)(void *)osi_dma;
 	u32 global_dma_status_reg[OSI_MAX_MAC_IP_TYPES] = {
-		HW_GLOBAL_DMA_STATUS,
 		HW_GLOBAL_DMA_STATUS,
 		MGBE_T26X_GLOBAL_DMA_STATUS,
 	};
@@ -1071,6 +957,7 @@ s32 osi_get_global_dma_status(struct osi_dma_priv_data *osi_dma,
 					       ((u64)i * 4U));
 			dma_status[i] = osi_dma_readl((u8 *)osi_dma->base +
 					(u32)(temp_addr & (u64)MAX_REG_OFFSET));
+
 		}
 	}
 fail:
@@ -1081,21 +968,11 @@ fail:
 	return ret;
 }
 
-#ifdef OSI_CL_FTRACE
-u32 osi_handle_dma_intr_cnt = 0;
-#endif /* OSI_CL_FTRACE */
-s32 osi_handle_dma_intr(struct osi_dma_priv_data *osi_dma,
-			    u32 chan,
-			    u32 tx_rx,
-			    u32 en_dis)
+s32 osi_handle_tx_intr(struct osi_dma_priv_data *osi_dma, u32 chan, u32 flag)
 {
 	struct dma_local *l_dma = (struct dma_local *)(void *)osi_dma;
 	s32 ret = 0;
 
-#ifdef OSI_CL_FTRACE
-	if ((osi_handle_dma_intr_cnt % 1000) == 0)
-		slogf(0, 2, "%s : Function Entry\n", __func__);
-#endif /* OSI_CL_FTRACE */
 	if (dma_validate_args(osi_dma, l_dma) < 0) {
 		ret = -1;
 		goto fail;
@@ -1106,22 +983,40 @@ s32 osi_handle_dma_intr(struct osi_dma_priv_data *osi_dma,
 		goto fail;
 	}
 
-	if ((tx_rx > OSI_DMA_CH_RX_INTR) ||
-	    (en_dis > OSI_DMA_INTR_ENABLE)) {
+	if(flag == OSI_DMA_INTR_DISABLE)
+	{
+		ret = dma_disable_intr(osi_dma, chan, OSI_DMA_CH_TX_INTR);
+	}else{
+		ret = dma_enable_intr(osi_dma, chan, OSI_DMA_CH_TX_INTR);
+	}
+
+fail:
+	return ret;
+}
+
+s32 osi_handle_rx_intr(struct osi_dma_priv_data *osi_dma, u32 chan, u32 flag)
+{
+	struct dma_local *l_dma = (struct dma_local *)(void *)osi_dma;
+	s32 ret = 0;
+
+	if (dma_validate_args(osi_dma, l_dma) < 0) {
 		ret = -1;
 		goto fail;
 	}
 
-	ret = intr_fn[en_dis](osi_dma, VIRT_INTR_CHX_CNTRL(chan),
-		VIRT_INTR_CHX_STATUS(chan), ((osi_dma->mac > OSI_MAC_HW_EQOS) ?
-		MGBE_DMA_CHX_STATUS(chan) : EQOS_DMA_CHX_STATUS(chan)),
-		OSI_BIT(tx_rx));
+	if (validate_dma_chan_num(osi_dma, chan) < 0) {
+		ret = -1;
+		goto fail;
+	}
+
+	if(flag == OSI_DMA_INTR_DISABLE)
+	{
+		ret = dma_disable_intr(osi_dma, chan, OSI_DMA_CH_RX_INTR);
+	}else{
+		ret = dma_enable_intr(osi_dma, chan, OSI_DMA_CH_RX_INTR);
+	}
 
 fail:
-#ifdef OSI_CL_FTRACE
-	if ((osi_handle_dma_intr_cnt++ % 1000) == 0)
-		slogf(0, 2, "%s : Function Exit\n", __func__);
-#endif /* OSI_CL_FTRACE */
 	return ret;
 }
 
@@ -1189,15 +1084,13 @@ static inline s32 rx_dma_desc_dma_validate_args(
 
 	if (!((rx_ring != OSI_NULL) && (rx_ring->rx_swcx != OSI_NULL) &&
 	      (rx_ring->rx_desc != OSI_NULL))) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma: Invalid pointers\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma: Invalid pointers\n");
 		ret = -1;
 		goto fail;
 	}
 
 	if (validate_dma_chan_num(osi_dma, chan) < 0) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma: Invalid channel\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma: Invalid channel\n");
 		ret = -1;
 		goto fail;
 	}
@@ -1285,10 +1178,6 @@ s32 osi_rx_dma_desc_init(struct osi_dma_priv_data *osi_dma,
 		rx_desc->rdes2 = 0;
 		rx_desc->rdes3 = RDES3_IOC;
 
-		if (osi_dma->mac == OSI_MAC_HW_EQOS) {
-			rx_desc->rdes3 |= RDES3_B1V;
-		}
-
 		/* Reset IOC bit if RWIT is enabled */
 		rx_dma_handle_ioc(osi_dma, rx_ring, rx_desc);
 		rx_desc->rdes3 |= RDES3_OWN;
@@ -1306,8 +1195,7 @@ s32 osi_rx_dma_desc_init(struct osi_dma_priv_data *osi_dma,
 
 	if (osi_unlikely(tailptr < rx_ring->rx_desc_phy_addr)) {
 		/* Will not hit this case, used for CERT-C compliance */
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma: Invalid tailptr\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "dma: Invalid tailptr\n");
 		ret = -1;
 		goto fail;
 	}
@@ -1337,8 +1225,7 @@ s32 osi_set_rx_buf_len(struct osi_dma_priv_data *osi_dma)
 	}
 
 	if (osi_dma->mtu > OSI_MAX_MTU_SIZE) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "Invalid MTU setting\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "Invalid MTU setting\n");
 		ret = -1;
 		goto fail;
 	}
@@ -1373,13 +1260,13 @@ static u64 read_systime_from_mac(void *addr, u32 mac_type)
         u64 ns1, ns2, ns = 0;
         u32 varmac_stnsr, temp1;
         u32 varmac_stsr;
-	const u32 mac_stnsr_mask[3U] = {EQOS_MAC_STNSR_TSSS_MASK,
+	const u32 mac_stnsr_mask[3U] = {MGBE_MAC_STNSR_TSSS_MASK,
 					     MGBE_MAC_STNSR_TSSS_MASK,
 					     MGBE_MAC_STNSR_TSSS_MASK};
-	const u32 mac_stnsr[3U] = {EQOS_MAC_STNSR,
+	const u32 mac_stnsr[3U] = {MGBE_MAC_STNSR,
 					MGBE_MAC_STNSR,
 					MGBE_MAC_STNSR};
-	const u32 mac_stsr[3U] = {EQOS_MAC_STSR,
+	const u32 mac_stsr[3U] = {MGBE_MAC_STSR,
 				       MGBE_MAC_STSR,
 				       MGBE_MAC_STSR};
 
@@ -1475,8 +1362,7 @@ s32 osi_hw_transmit(struct osi_dma_priv_data *osi_dma, u32 chan)
 	}
 
 	if (osi_unlikely(osi_dma->tx_ring[chan] == OSI_NULL)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA: Invalid Tx ring\n", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "DMA: Invalid Tx ring\n");
 		ret = -1;
 		goto fail;
 	}
@@ -1521,8 +1407,7 @@ s32 osi_dma_ioctl(struct osi_dma_priv_data *osi_dma)
 		set_rx_riit(osi_dma, data->arg_u32);
 		break;
 	default:
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "DMA: Invalid IOCTL command", 0ULL);
+		OSI_DMA_ERR(osi_dma->osd, "DMA: Invalid IOCTL command");
 		return -1;
 	}
 
@@ -1567,8 +1452,7 @@ static inline s32 osi_slot_args_validate(struct osi_dma_priv_data *osi_dma,
 
 	/* return on invalid set argument */
 	if ((set != OSI_ENABLE) && (set != OSI_DISABLE)) {
-		OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-			    "dma: Invalid set argument\n", set);
+		OSI_DMA_ERR(osi_dma->osd, "dma: Invalid set argument:%u\n", set);
 		return -1;
 	}
 
@@ -1603,16 +1487,14 @@ s32 osi_config_slot_function(struct osi_dma_priv_data *osi_dma,
 			interval = osi_dma->slot_interval[chan];
 			if (interval > OSI_SLOT_INTVL_MAX) {
 				OSI_DMA_ERR(osi_dma->osd,
-					    OSI_LOG_ARG_INVALID,
-					    "dma: Invalid interval arguments\n",
+					    "dma: Invalid interval arguments:%u\n",
 					    interval);
 				return -1;
 			}
 
 			tx_ring = osi_dma->tx_ring[chan];
 			if (tx_ring == OSI_NULL) {
-				OSI_DMA_ERR(osi_dma->osd, OSI_LOG_ARG_INVALID,
-					    "tx_ring is null\n", chan);
+				OSI_DMA_ERR(osi_dma->osd, "tx_ring is null, chan:%u\n", chan);
 				return -1;
 			}
 			tx_ring->slot_check = set;
