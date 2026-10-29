@@ -3,12 +3,12 @@
  *
  * DWC_macsec 1.05a OSI Hardware Abstraction Implementation
  *
- * Implements the osi_macsec_core_ops interface using Synopsys DWC_macsec
- * 1.05a SAI/SAD register architecture, replacing Omni's LUT-based approach.
+ * Implements the osi_macsec_core_ops interface for Synopsys DWC_macsec
+ * 1.05a SAI/SAD register architecture.
  *
  * Hardware: DWC_macsec Single Port AC Security Module v1.05a
- *   - TX: 16 SC x 2 SA = 32 SA total
- *   - RX: 128 SC x 4 SA = 512 SA total
+ *   - TX: 16 SCs x 2 SAs = 32 SAs total
+ *   - RX: 128 SCs x 4 SAs = 512 SAs total
  *   - AES-GCM-128/256, 546 key contexts
  *   - MIB counters via indirect MIB_CMD interface
  *   - Keys via separate APB (macsec_id_aes_host_cfg)
@@ -82,9 +82,7 @@ static inline u8 dwc_unmap_tci(u8 dwc_tci)
 /* Default PN threshold (SOFT_TTL) - trigger at 75% of 32-bit PN space */
 #define DWC_DEFAULT_PN_THRESHOLD	0xC0000000U
 
-/* ============================================================
- * Polling helpers
- * ============================================================ */
+/* Polling helpers */
 
 static s32 dwc_poll_busy(struct osi_core_priv_data *const osi_core,
 			     u32 reg_offset)
@@ -171,9 +169,7 @@ static s32 dwc_poll_aes_busy(struct osi_core_priv_data *const osi_core)
 }
 #endif /* MACSEC_KEY_PROGRAM */
 
-/* ============================================================
- * TX/RX SAI (Lookup Table) programming
- * ============================================================ */
+/* TX/RX SAI (Lookup Table) programming */
 
 /**
  * @brief Write a TX SAI lookup entry
@@ -471,9 +467,7 @@ static s32 dwc_rx_sai_clear(struct osi_core_priv_data *const osi_core,
 	return dwc_poll_busy(osi_core, DWC_MACSEC_RX_SAI_PG);
 }
 
-/* ============================================================
- * TX/RX SAD (Security Association Data) programming
- * ============================================================ */
+/* TX/RX SAD (Security Association Data) programming */
 
 /**
  * @brief Write a TX SAD entry
@@ -784,10 +778,7 @@ static s32 dwc_rx_sad_clear(struct osi_core_priv_data *const osi_core,
 				0U, 0U, 0U, 0U);
 }
 
-/* ============================================================
- * RX SC correlation table programming
- * Maps RX SA index -> SC index for MIB counter grouping
- * ============================================================ */
+/* RX SC correlation table programming (maps RX SA index to SC index) */
 
 static s32 dwc_rx_sc_corr_write(struct osi_core_priv_data *const osi_core,
 				    u16 sa_index, u32 sc_index)
@@ -811,12 +802,10 @@ static s32 dwc_rx_sc_corr_write(struct osi_core_priv_data *const osi_core,
 	return dwc_poll_busy(osi_core, DWC_MACSEC_RX_SC_CORR_PG);
 }
 
-/* ============================================================
- * RX Anti-Replay Window (ARW) table programming
- * DWC_macsec 1.05a uses logarithmic ARW: the table stores an
- * exponent n, representing a window of size 2^n.
- * One entry per RX SA (depth = DWC_MACSEC_RX_MAX_SA = 64).
- * ============================================================ */
+/*
+ * RX Anti-Replay Window (ARW) table programming.
+ * Logarithmic ARW stores exponent n representing window size 2^n.
+ */
 
 /**
  * @brief Convert linear pn_window to logarithmic ARW exponent
@@ -931,24 +920,10 @@ static s32 dwc_arw_read(struct osi_core_priv_data *const osi_core,
 	return 0;
 }
 
-/* ============================================================
- * TX/RX SALT table programming (XPN)
- *
- * DWC_macsec 1.05a with XPN enabled stores a 96-bit SSCI
- * (Short SCI) per SA in the SALT table. The SAD entries
- * reference SALT table entries by index.
- *
- * SSCI derivation (IEEE 802.1AE):
- *   SSCI[31:0]  = SCI[4:7] (Port ID)
- *   SSCI[63:32] = SCI[0:3] (System Identifier)
- *   SSCI[95:64] = SCI[4:7] (duplicated for 96-bit table entry)
- *
- * Both CONFIG_MACSEC and MACSEC_KEY_PROGRAM paths need SALT
- * programming since the DWC IP has XPN always enabled.
- *
- * TX SALT depth = DWC_MACSEC_TX_SALT_MAX (32 entries)
- * RX SALT depth = DWC_MACSEC_RX_SALT_MAX (512 entries)
- * ============================================================ */
+/*
+ * TX/RX SALT table programming (XPN).
+ * Stores 96-bit SSCI per SA in SALT table referenced by SAD entries.
+ */
 
 /**
  * @brief Derive 96-bit SSCI from 8-byte SCI for SALT table programming.
@@ -972,8 +947,8 @@ static void dwc_derive_ssci(const u8 *sci, u8 *salt,
 		   ((u32)sci[2] << 8)  | (u32)sci[3];
 
 	/* 96-bit SALT entry:
-	 * salt[0:3] = SCI[0:3] (System ID — SSCI[63:32])
-	 * salt[4:7] = SCI[4:7] (Port ID  — SSCI[31:0])
+	 * salt[0:3] = SCI[0:3] (System ID: SSCI[63:32])
+	 * salt[4:7] = SCI[4:7] (Port ID:  SSCI[31:0])
 	 * salt[8:11]= SCI[4:7] (duplicated for upper 32)
 	 */
 	osi_memcpy(&salt[0], &sci[0], 4U);
@@ -1204,9 +1179,7 @@ static u8 dwc_tx_get_active_an(struct osi_core_priv_data *const osi_core,
 	return ((val & OSI_BIT(sc_index)) != OSI_NONE) ? 1U : 0U;
 }
 
-/* ============================================================
- * AES Key programming (via separate APB interface: tz_base)
- * ============================================================ */
+/* AES Key programming (via tz_base APB interface) */
 
 #if defined(MACSEC_KEY_PROGRAM)
 /**
@@ -1236,7 +1209,7 @@ static s32 dwc_aes_key_program(struct osi_core_priv_data *const osi_core,
 		return ret;
 	}
 
-	/* Write key data to KEY_0..KEY_7 in Big-Endian order per DWC driver manual section 3.2 step 2.a.i */
+	/* Write key data to KEY_0..KEY_7 in big-endian order */
 	key_regs = (key_len_256 != OSI_NONE) ? 8U : 4U;
 	for (i = 0; i < key_regs; i++) {
 		val = ((u32)key[i * 4U] << 24) |
@@ -1263,9 +1236,7 @@ static s32 dwc_aes_key_program(struct osi_core_priv_data *const osi_core,
 		return ret;
 	}
 
-	/* Security best practice per DWC driver manual section 3.2 step 2.a.iv:
-	 * Clear KEY_0..KEY_7 to 0x0 to avoid key readback.
-	 */
+	/* Clear KEY_0..KEY_7 to prevent key exposure */
 	for (i = 0; i < key_regs; i++) {
 		osi_writela(osi_core, 0U, base + DWC_AES_KEY(i));
 	}
@@ -1273,25 +1244,10 @@ static s32 dwc_aes_key_program(struct osi_core_priv_data *const osi_core,
 	return 0;
 }
 
-/* ============================================================
- * FIPS 140-3 on-demand BIST (Built-In Self Test)
- *
- * Databook section 2.14.1:
- *   - Power-up BIST runs automatically after core reset
- *   - On-demand BIST can be re-triggered by software
- *   - Uses hard-coded test vectors, context index 96
- *
- * On-demand BIST flow (databook 2.14.1):
- *   1. Inhibit AES output via MISC_CONFIG.INHIBIT_OUTPUT
- *   2. Enable test mode via FIPS_SELF_TEST_CTL.ENA
- *   3. Setup BIST_VECT_MODE (batch mode = 0)
- *   4. Clear FIPS_SELF_TEST_STAT.DONE and .FAIL
- *   5. Trigger via BIST_VECT_CTL.BIST_TEST_GO
- *   6. Poll FIPS_SELF_TEST_STAT.SELF_TEST_DONE
- *   7. Check FIPS_SELF_TEST_STAT.SELF_TEST_FAIL
- *   8. On failure, read FAIL_CAUSE; optionally inhibit output
- *   9. Clear test mode and re-enable output
- * ============================================================ */
+/*
+ * FIPS 140-3 on-demand BIST (Built-In Self Test).
+ * Verifies crypto engine using hard-coded test vectors before use.
+ */
 
 /**
  * @brief Run FIPS 140-3 on-demand BIST
@@ -1311,7 +1267,7 @@ static s32 dwc_aes_fips_selftest(struct osi_core_priv_data *const osi_core)
 
 	/* Check if CTR mode is supported (CONFIG.CTR_EN reflects
 	 * DWC_MACSEC_AES_FIPS_EN at synthesis time). If CTR_EN=0,
-	 * FIPS is not synthesized �� skip self-test.
+	 * FIPS is not synthesized in HW; skip self-test.
 	 */
 	val = osi_readla(osi_core, base + DWC_AES_CONFIG);
 	if ((val & DWC_AES_CONFIG_CTR_EN) == OSI_NONE) {
@@ -1321,29 +1277,29 @@ static s32 dwc_aes_fips_selftest(struct osi_core_priv_data *const osi_core)
 
 	MACSEC_LOG("Starting AES FIPS 140-3 on-demand BIST\n");
 
-	/* Step 1: Inhibit AES-GCM output */
+	/* Inhibit AES-GCM output */
 	osi_writela(osi_core, DWC_AES_MISC_INHIBIT_OUTPUT,
 		    base + DWC_AES_MISC_CONFIG);
 
-	/* Step 2: Enable FIPS self-test mode */
+	/* Enable FIPS self-test mode */
 	osi_writela(osi_core, DWC_AES_FIPS_CTL_ENA,
 		    base + DWC_AES_FIPS_SELF_TEST_CTL);
 
-	/* Step 3: Setup BIST vector mode: Batch (all tests) */
+	/* Set BIST vector mode to batch */
 	osi_writela(osi_core, DWC_AES_BIST_FUNCT_BATCH,
 		    base + DWC_AES_BIST_VECT_MODE);
 
-	/* Step 4: Clear previous DONE and FAIL status (W1C) */
+	/* Clear previous DONE and FAIL status (W1C) */
 	osi_writela(osi_core,
 		    DWC_AES_FIPS_STAT_SELF_TEST_DONE |
 		    DWC_AES_FIPS_STAT_SELF_TEST_FAIL,
 		    base + DWC_AES_FIPS_SELF_TEST_STAT);
 
-	/* Step 5: Trigger BIST (self-clearing bit) */
+	/* Trigger BIST (self-clearing bit) */
 	osi_writela(osi_core, DWC_AES_BIST_TEST_GO,
 		    base + DWC_AES_BIST_VECT_CTL);
 
-	/* Step 6: Poll FIPS_SELF_TEST_STAT.SELF_TEST_DONE */
+	/* Poll FIPS_SELF_TEST_STAT.SELF_TEST_DONE */
 	while (count < DWC_AES_FIPS_POLL_COUNT) {
 		val = osi_readla(osi_core,
 				 base + DWC_AES_FIPS_SELF_TEST_STAT);
@@ -1362,7 +1318,7 @@ static s32 dwc_aes_fips_selftest(struct osi_core_priv_data *const osi_core)
 		goto cleanup;
 	}
 
-	/* Step 7: Check fail status */
+	/* Check fail status */
 	if ((val & DWC_AES_FIPS_STAT_SELF_TEST_FAIL) != OSI_NONE) {
 		OSI_CORE_ERR(osi_core->osd, 
 			     "AES FIPS BIST FAILED: %llu\n",
@@ -1372,7 +1328,7 @@ static s32 dwc_aes_fips_selftest(struct osi_core_priv_data *const osi_core)
 		goto cleanup;
 	}
 
-	/* Step 8: Success �� disable test mode, re-enable output */
+	/* Disable test mode and re-enable output */
 	osi_writela(osi_core, 0U, base + DWC_AES_FIPS_SELF_TEST_CTL);
 	osi_writela(osi_core, 0U, base + DWC_AES_MISC_CONFIG);
 
@@ -1388,9 +1344,7 @@ cleanup:
 }
 #endif /* MACSEC_KEY_PROGRAM */
 
-/* ============================================================
- * MIB counter access
- * ============================================================ */
+/* MIB counter access */
 
 /**
  * @brief Read a single MIB counter value
@@ -1465,13 +1419,11 @@ static s32 dwc_mib_init(struct osi_core_priv_data *const osi_core,
 	return dwc_poll_mib_busy(osi_core);
 }
 
-/* ============================================================
- * SA index calculation helpers
- * TX: sa_index = (sc_idx * DWC_MACSEC_TX_SA_PER_SC) + (an & 0x1)
- *     TX has 2 SA per SC, AN is 0 or 1
- * RX: sa_index = (sc_idx * DWC_MACSEC_RX_SA_PER_SC) + (an & 0x3)
- *     RX has 4 SA per SC, AN is 0-3
- * ============================================================ */
+/*
+ * SA index calculation helpers:
+ *  - TX: 2 SAs per SC, AN is 0 or 1
+ *  - RX: 4 SAs per SC, AN is 0 to 3
+ */
 
 static inline u16 dwc_tx_sa_index(u32 sc_idx, u8 an)
 {
@@ -1483,10 +1435,7 @@ static inline u16 dwc_rx_sa_index(u32 sc_idx, u8 an)
 	return (u16)((sc_idx * DWC_MACSEC_RX_SA_PER_SC) + (an & 0x3U));
 }
 
-/* ============================================================
- * Main enable/disable
- * DWC_macsec uses bypass bits (set=bypass, clear=active)
- * ============================================================ */
+/* Main enable/disable */
 
 static s32 dwc_macsec_enable(struct osi_core_priv_data *const osi_core,
 				 u32 enable)
@@ -1519,17 +1468,10 @@ static s32 dwc_macsec_enable(struct osi_core_priv_data *const osi_core,
 	return ret;
 }
 
-/* ============================================================
- * LUT config (compatibility with existing osi_macsec_core_ops)
- *
- * Maps the Omni LUT-based interface to DWC SAI/SAD operations.
- * The lut_sel field determines which DWC table to program:
- *   0 (BYP LUT)    -> TX/RX SAI with bypass outcome
- *   1 (SCI LUT)    -> TX/RX SAI with macsec outcome
- *   2 (SC_PARAM)   -> TX/RX SAD for SC parameters (key index mapping)
- *   3 (SC_STATE)   -> TX_ACTIVE_AN for TX, no-op for RX
- *   4 (SA_STATE)   -> TX/RX SAD for PN/lowest_pn
- * ============================================================ */
+/*
+ * LUT config compatibility wrapper.
+ * Maps legacy LUT-based interface requests to DWC SAI/SAD operations.
+ */
 
 static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 			      struct osi_macsec_lut_config *const lut_config)
@@ -1646,11 +1588,7 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 		break;
 
 	case OSI_LUT_SEL_SC_PARAM:
-		/* DWC_macsec has no separate SC_PARAM table.
-		 * Map SC_PARAM updates to SAD re-writes:
-		 * - TX: re-program SAD with updated TCI
-		 * - RX: re-program SAD with updated pn_window (replay)
-		 */
+		/* Update SAD entries with new SC parameters (TCI / replay settings) */
 		if (rw == OSI_LUT_WRITE) {
 			if (ctlr == OSI_CTLR_SEL_TX) {
 				/* Re-read current PN, then rewrite SAD with new TCI */
@@ -1797,9 +1735,7 @@ static s32 dwc_lut_config(struct osi_core_priv_data *const osi_core,
 	return ret;
 }
 
-/* ============================================================
- * Key table config (compatibility wrapper)
- * ============================================================ */
+/* Key table config wrapper */
 
 #if defined(MACSEC_KEY_PROGRAM)
 /**
@@ -1872,27 +1808,18 @@ static s32 dwc_kt_config(struct osi_core_priv_data *const osi_core,
 				   key_len_256, encrypt);
 }
 #endif /* MACSEC_KEY_PROGRAM */
-/* ============================================================
- * Cipher configuration
- * DWC_macsec selects cipher via AES_CTRL.KEY_SZ per key context,
- * not a global register. This function just stores the setting.
- * ============================================================ */
+/* Cipher configuration */
 
 static s32 dwc_cipher_config(struct osi_core_priv_data *const osi_core,
 				 u32 cipher)
 {
-	/* DWC_macsec sets key size per-context in AES_CTRL.KEY_SZ.
-	 * Store the cipher selection for use during key programming.
-	 */
+	/* Store cipher selection for subsequent key programming */
 	MACSEC_LOG("%s: cipher=%u\n", __func__, cipher);
 	osi_core->macsec_cipher = cipher;
 	return 0;
 }
 
-/* ============================================================
- * MACsec MMC counter reading
- * DWC_macsec uses indirect MIB_CMD to read counters
- * ============================================================ */
+/* MACsec MMC counter reading */
 
 static void dwc_read_mmc(struct osi_core_priv_data *const osi_core)
 {
@@ -1927,10 +1854,7 @@ static void dwc_read_mmc(struct osi_core_priv_data *const osi_core)
 	mmc->rx_octets_validated = dwc_mib_read_counter(osi_core,
 		DWC_MIB_RX_OCTETS_VALIDATED_GBL, 0U, 0U, 0U);
 
-	/* High-performance Per-SC counters:
-	 * Only poll active SCs that are configured in macsec_lut_status,
-	 * avoiding over 100 blind MIB_CMD indirect bus transactions and polling waits.
-	 */
+	/* Read per-SC counters for active SCs only */
 	tx_lut = &osi_core->macsec_lut_status[OSI_CTLR_SEL_TX];
 	for (i = 0; i < OSI_MACSEC_MMC_SC_MAX && i < DWC_MACSEC_TX_MAX_SC; i++) {
 		if (tx_lut->sc_info[i].an_valid != OSI_NONE) {
@@ -1967,10 +1891,7 @@ static void dwc_read_mmc(struct osi_core_priv_data *const osi_core)
 	}
 }
 
-/* ============================================================
- * IRQ handler
- * DWC_macsec uses IRQ_GLBL_STAT (W1C) + per-SA IRQ registers
- * ============================================================ */
+/* IRQ handler */
 
 static void dwc_handle_tx_sa_irq(struct osi_core_priv_data *const osi_core,
 				 u32 sa_idx)
@@ -2063,15 +1984,7 @@ static void dwc_handle_rx_sa_irq(struct osi_core_priv_data *const osi_core,
 	osi_writela(osi_core, stat, base + DWC_MACSEC_IRQ_RX_SA_STAT(sa_idx));
 }
 
-/* ============================================================
- * AES APB IRQ handler (tz_base domain)
- * Databook 6.2.1 / 6.2.2: IRQ_EN / IRQ_STAT bit fields
- *   bit 31 = GLBL (master enable, EN only)
- *   bit 17 = FSM_PAR_ERR
- *   bit 16 = REG_PAR_ERR
- *   bit  4 = CTX_IDX_ERR
- *   bit  0 = KEY_DONE
- * ============================================================ */
+/* AES APB IRQ handler (tz_base domain) */
 
 #if defined(MACSEC_KEY_PROGRAM)
 static void dwc_handle_aes_irq(struct osi_core_priv_data *const osi_core)
@@ -2142,10 +2055,7 @@ static void dwc_handle_irq(struct osi_core_priv_data *const osi_core)
 		osi_writela(osi_core, glbl_stat, base + DWC_MACSEC_IRQ_GLBL_STAT);
 	}
 
-	/* High-performance per-SA TX interrupt handling:
-	 * Only poll SAs that are actively configured in RAM (macsec_lut_status),
-	 * avoiding 32 unnecessary MMIO reads across the bus on every IRQ.
-	 */
+	/* Check TX SA interrupts for configured SCs */
 	tx_lut = &osi_core->macsec_lut_status[OSI_CTLR_SEL_TX];
 	if (tx_lut->num_of_sc_used > 0) {
 		for (i = 0; i < DWC_MACSEC_TX_MAX_SC; i++) {
@@ -2163,10 +2073,7 @@ static void dwc_handle_irq(struct osi_core_priv_data *const osi_core)
 		}
 	}
 
-	/* High-performance per-SA RX interrupt handling:
-	 * Only poll SAs that are actively configured in RAM,
-	 * avoiding 64 unnecessary MMIO reads on every IRQ.
-	 */
+	/* Check RX SA interrupts for configured SCs */
 	rx_lut = &osi_core->macsec_lut_status[OSI_CTLR_SEL_RX];
 	if (rx_lut->num_of_sc_used > 0) {
 		for (i = 0; i < DWC_MACSEC_RX_MAX_SC; i++) {
@@ -2190,9 +2097,7 @@ static void dwc_handle_irq(struct osi_core_priv_data *const osi_core)
 #endif /* MACSEC_KEY_PROGRAM */
 }
 
-/* ============================================================
- * Clear all SAI and SAD tables
- * ============================================================ */
+/* Table clear operations */
 
 static s32 dwc_clear_all_sai(struct osi_core_priv_data *const osi_core)
 {
@@ -2258,10 +2163,7 @@ static s32 dwc_clear_all_arw(struct osi_core_priv_data *const osi_core)
 	return 0;
 }
 
-/* ============================================================
- * Set bypass SAI entries for MKPDU and broadcast packets
- * These are equivalent to Omni's BYP LUT entries
- * ============================================================ */
+/* Bypass SAI entries configuration */
 
 static s32 dwc_set_bypass_entries(struct osi_core_priv_data *const osi_core)
 {
@@ -2293,11 +2195,7 @@ static s32 dwc_set_bypass_entries(struct osi_core_priv_data *const osi_core)
 	return 0;
 }
 
-/* ============================================================
- * MTU update
- * DWC_macsec doesn't have separate MTU registers like Omni.
- * MTU is handled per-SA via SAD_1 registers, or the MAC layer.
- * ============================================================ */
+/* MTU update */
 
 static s32 dwc_update_mtu(struct osi_core_priv_data *const osi_core,
 			      u32 mtu)
@@ -2310,12 +2208,7 @@ static s32 dwc_update_mtu(struct osi_core_priv_data *const osi_core,
 	return 0;
 }
 
-/* ============================================================
- * SC/SA configuration (osi_macsec_core_ops.config)
- *
- * This is the main entry point for creating/enabling/disabling SAs.
- * Maps Omni's SC-based configuration to DWC_macsec's SAI/SAD/AES model.
- * ============================================================ */
+/* SC/SA configuration (osi_macsec_core_ops.config) */
 
 static s32 dwc_find_existing_sc(struct osi_core_priv_data *const osi_core,
 				    const struct osi_macsec_sc_info *const sc,
@@ -2385,11 +2278,7 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 #else
 	sess_debug_program_plain_sa_key(sc_info->sak,key_len_256,0,sa_idx,1);
 #endif /* MACSEC_KEY_PROGRAM */
-		/* Program TX SAD — always include XPN SSCI/SALT fields since
-	 * DWC IP_CONTROL.XPNSEL is always set (hardware XPN always on).
-	 * For both CONFIG_MACSEC and MACSEC_KEY_PROGRAM, derive SSCI
-	 * from SCI per IEEE 802.1AE.
-	 */
+		/* Program TX SAD: include XPN SSCI/SALT fields when XPN is enabled */
 		{
 			u8 salt_buf[12];
 			u32 sys_id_lo = 0U, sys_id_hi = 0U;
@@ -2475,7 +2364,7 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 #else
 		sess_debug_program_plain_sa_key(sc_info->sak,key_len_256,0,sa_idx + DWC_MACSEC_TX_MAX_SA,0);
 #endif /* MACSEC_KEY_PROGRAM */
-		/* DWC manual 3.2: RX order = Key → SAD → SALT → ARW -> SAI → MIB SC */
+		/* RX programming order: SAD, SALT, ARW, SAI, SC correlation */
 		{
 			u8 salt_buf[12];
 			u32 validate_frames = DWC_MACSEC_RX_SAD0H_VALIDATE_STRICT;
@@ -2505,7 +2394,7 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 				xpn_hi = sc_info->lowest_pn_hi;
 			}
 
-			/* Step 6: RX SAD first (DWC manual 3.2: SAD→SALT→ARW→SAI) */
+			/* Program RX SAD */
 			u32 port_id = ((u32)sc_info->sci[6] << 8) | (u32)sc_info->sci[7];
 			ret = dwc_rx_sad_write(osi_core, sa_idx,
 					       pn_or_ssci, 1U, 1U,
@@ -2531,7 +2420,7 @@ static s32 dwc_add_update_sa(struct osi_core_priv_data *const osi_core,
 				}
 			}
 
-			/* Program RX ARW → Step 9: RX SAI — ARW must be ready before SAI lookup */
+			/* Program RX ARW before SAI lookup */
 			ret = dwc_arw_write(osi_core, sa_idx, sc_info->pn_window);
 			if (ret < 0) {
 				return ret;
@@ -2710,10 +2599,7 @@ static s32 dwc_configure(struct osi_core_priv_data *const osi_core,
 		} else {
 			/* Add/update SA to existing SC */
 			if (sc->flags != OSI_ENABLE_SA) {
-				/* Only copy key for CREATE_SA. During ENABLE_SA
-				 * the caller may not have a valid key (kernel
-				 * doesn't provide key during SA updates).
-				 */
+				/* Key material is only copied during CREATE_SA */
 				osi_memcpy(existing_sc->sak, sc->sak,OSI_KEY_LEN_256);
 				existing_sc->xpn = sc->xpn;
 				existing_sc->ssci = sc->ssci;
@@ -2740,9 +2626,7 @@ static s32 dwc_configure(struct osi_core_priv_data *const osi_core,
 	return ret;
 }
 
-/* ============================================================
- * Get key index for a given SCI
- * ============================================================ */
+/* Key index lookup for SCI */
 
 static s32 dwc_get_sc_lut_key_index(
 	struct osi_core_priv_data *const osi_core,
@@ -2778,15 +2662,12 @@ static s32 dwc_get_sc_lut_key_index(
 	return -1;
 }
 #if 0
-/* ============================================================
- * ETH Subsystem CSR: MACsec clock-gate, reset, SRAM zero
- * These registers are outside the MACsec IP, in the ETH CSR block.
- * ============================================================ */
+/* ETH Subsystem CSR: MACsec clock gating, reset, SRAM zeroization */
 
 /**
  * @brief Enable MACsec clock-gate and release reset via ETH CSR
  *
- * Sequence: set macsec_enable �� set macsec_rst_n �� SRAM zeroization
+ * Sequence: set macsec_enable, set macsec_rst_n, SRAM zeroization
  *
  * @param[in] osi_core: OSI core private data (csr_base must be set)
  * @return 0 on success, -1 on failure
@@ -2803,12 +2684,12 @@ static s32 dwc_eth_csr_macsec_init(
 		return -1;
 	}
 
-	/* Step 1: Enable MACsec clock gate */
+	/* Enable MACsec clock gate */
 	val = osi_readla(osi_core, csr + ETH_CSR_CTRL_5);
 	val |= ETH_CSR_MACSEC_ENABLE;
 	osi_writela(osi_core, val, csr + ETH_CSR_CTRL_5);
 
-	/* Step 2: De-assert MACsec software reset */
+	/* De-assert MACsec software reset */
 	val |= ETH_CSR_MACSEC_RST_N;
 	osi_writela(osi_core, val, csr + ETH_CSR_CTRL_5);
 
@@ -2816,17 +2697,11 @@ static s32 dwc_eth_csr_macsec_init(
 	osi_core->osd_ops.udelay(10U);
 
 #ifdef DWC_MACSEC_USE_SRAM
-	/* Step 3: SRAM zeroization (databook 2.15)
-	 * Assert I_sram_zero_init �� fixed delay �� deassert.
-	 * Note: O_sram_zero_done is not exposed in CSR, use fixed delay.
-	 */
+	/* Trigger SRAM zeroization via CSR */
 	val |= ETH_CSR_MACSEC_SRAM_ZERO_INIT;
 	osi_writela(osi_core, val, csr + ETH_CSR_CTRL_5);
 
-	/* Wait for SRAM zeroization to complete.
-	 * Worst case: all SRAM entries (~32+64 SAD + SALT + MIB + ARW)
-	 * at ~1 entry/clk cycle @ 250MHz �� a few us. Use conservative delay.
-	 */
+	/* Wait for SRAM zeroization completion */
 	osi_core->osd_ops.udelay(100U);
 
 	/* Deassert sram_zero_init */
@@ -2880,9 +2755,7 @@ static void dwc_eth_csr_macsec_deinit(
 }
 #endif
 
-/* ============================================================
- * Initialization
- * ============================================================ */
+/* Hardware initialization */
 
 static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 				     u32 mtu,
@@ -3047,9 +2920,7 @@ static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 		return ret;
 	}
 
-	/* Do NOT enable MACsec yet; keep bypass active until SAs are configured.
-	 * The OSD layer will call dwc_macsec_enable() when ready.
-	 */
+	/* MACsec remains bypassed until enabled by OSD layer */
 
 	/* Clear software SC tracking */
 	osi_memset(&osi_core->macsec_lut_status[0], OSI_NONE,
@@ -3063,9 +2934,7 @@ static s32 dwc_macsec_initialize(struct osi_core_priv_data *const osi_core,
 	return 0;
 }
 
-/* ============================================================
- * De-initialization
- * ============================================================ */
+/* Hardware de-initialization */
 
 static s32 dwc_macsec_deinit(struct osi_core_priv_data *const osi_core)
 {
@@ -3104,23 +2973,18 @@ static s32 dwc_macsec_deinit(struct osi_core_priv_data *const osi_core)
 	osi_core->macsec_initialized = OSI_DISABLE;
 
 	/* Shutdown MACsec in ETH subsystem CSR (assert reset, gate clock) */
-	//dwc_eth_csr_macsec_deinit(osi_core);
 
 	MACSEC_LOG("DWC MACsec de-initialized\n");
 	return 0;
 }
 
 #ifdef DEBUG_MACSEC
-/* ============================================================
- * Debug operations (stubs)
- * DWC_macsec 1.05a doesn't have the same debug buffer
- * architecture as Omni. Provide no-op stubs.
- * ============================================================ */
+/* Debug operations (stubs) */
 
 static s32 dwc_loopback_config(struct osi_core_priv_data *const osi_core,
 				   u32 enable)
 {
-	/* DWC_macsec doesn't have a dedicated loopback mode register */
+	/* Dedicated loopback not supported in hardware */
 	MACSEC_LOG("%s: enable=%u (not supported on DWC)\n", __func__, enable);
 	return 0;
 }
@@ -3161,21 +3025,11 @@ static void dwc_intr_config(struct osi_core_priv_data *const osi_core,
 }
 #endif /* DEBUG_MACSEC */
 
-/* ============================================================
- * COE (Camera Over Ethernet) operations
- *
- * DWC_macsec 1.05a is a standard IEEE 802.1AE implementation and does NOT
- * have Omni's proprietary COE registers (COE_CONFIG at 0xA000,
- * COE_LINE_CNTR at 0xA004+ch*4).
- *
- * For MACsec-protected COE traffic, DWC_macsec handles frames transparently
- * via standard SAI LUT matching (DA/SA/EtherType) without needing knowledge
- * of the inner COE/AVTP header structure.
- *
- * The MGBE MAC-level COE DMA configuration (VDMA/PDMA buffers, split-header
- * offsets) is managed separately through osi_core_ops::config_coe_buf /
- * OSI_CMD_GMSL_COE_CONFIG, which is orthogonal to the MACsec path.
- * ============================================================ */
+/*
+ * Camera Over Ethernet (COE) configuration stubs.
+ * COE frames are handled via standard MACsec match rules;
+ * header splitting is managed by the MAC layer.
+ */
 
 /**
  * @brief dwc_coe_config - Configure COE mode for DWC_macsec
@@ -3230,9 +3084,7 @@ static s32 dwc_coe_lc(struct osi_core_priv_data *const osi_core,
 	return 0;
 }
 
-/* ============================================================
- * OSI operations struct and init function
- * ============================================================ */
+/* OSI operations struct and init function */
 
 void macsec_init_ops(void *macsecops)
 {

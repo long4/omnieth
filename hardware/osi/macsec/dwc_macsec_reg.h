@@ -2,26 +2,21 @@
  * Copyright (c) 2026-2030, Omni. All rights reserved.
  *
  * DWC_macsec 1.05a Register Definitions
- * Based on Synopsys DWC_macsec Single Port AC Security Module Databook
- *
- * This file replaces Omni's LUT-based register abstraction with
- * Omni's DWC_macsec 1.05a SAI/SAD direct table access registers.
+ * Based on Synopsys DWC_macsec Single Port AC Security Module Databook.
  */
 
 #ifndef INCLUDED_DWC_MACSEC_REG_H
 #define INCLUDED_DWC_MACSEC_REG_H
 
-/* ============================================================
- * DWC_macsec Hardware Configuration (from ComponentConfiguration)
- * ============================================================
- * TX SC: 16, TX SA per SC: 2, Total TX SA: 32
- * RX SC: 128, RX SA per SC: 4, Total RX SA: 512
- * Max Key: AES-256, XPN: enabled
- * Anti-Replay Window: Logarithmic
- * AES Key Contexts: 546 (TX 32 + RX 512 + FIPS 1 + SPARE 1)
- * Perf Rate: up to 25Gbps, Dual-IF: enabled
- * Data Interface: XLGMII (128-bit)
- * ============================================================ */
+/*
+ * Hardware configuration:
+ *  - TX: 16 SCs, 2 SAs per SC (32 SAs total)
+ *  - RX: 128 SCs, 4 SAs per SC (512 SAs total)
+ *  - Cipher: AES-GCM-128/256, XPN enabled
+ *  - Anti-Replay Window: Logarithmic
+ *  - AES Key Contexts: 546 (TX 32 + RX 512 + FIPS 1 + SPARE 1)
+ *  - Data Interface: XLGMII (128-bit), up to 25Gbps
+ */
 
 #define DWC_MACSEC_TX_MAX_SC		16U
 #define DWC_MACSEC_TX_SA_PER_SC		2U
@@ -38,14 +33,11 @@
 /* RX ARW entries: one per RX SA */
 #define DWC_MACSEC_RX_ARW_MAX		512U
 
-/* ============================================================
- * TCAM vs Internal FFs mode selection
- * When DWC_MACSEC_USE_TCAM is defined, SAI lookup uses external
- * TCAM memory. TCAM mode has higher datapath latency so polling
- * retries are increased. The SAI_PRG register interface is
- * identical; the IP internally bridges APB writes to the TCAM
- * O_sai_tcam_* hardware port signals.
- * ============================================================ */
+/*
+ * TCAM vs Internal FFs mode selection.
+ * External TCAM mode exhibits higher datapath latency, requiring
+ * increased polling retries.
+ */
 
 #ifdef DWC_MACSEC_USE_TCAM
 /* TCAM mode: higher latency (~2x), increase retry budget */
@@ -57,9 +49,7 @@
 #define DWC_MACSEC_SAI_RETRY_DELAY	1U
 #endif /* DWC_MACSEC_USE_TCAM */
 
-/* ============================================================
- * macsec_apb_cfg register offsets
- * ============================================================ */
+/* macsec_apb_cfg register offsets */
 
 /** @addtogroup DWC_MACSEC core registers
  * @{ */
@@ -204,9 +194,7 @@
 #define DWC_MACSEC_IRQ_TX_SA_STAT(x)	(0x194U + ((x) * 8U))
 /** @} */
 
-/* ============================================================
- * MACsec_IP_Control register (0x08) bit fields
- * ============================================================ */
+/* MACsec_IP_Control register (0x08) bit fields */
 
 /** @addtogroup DWC_MACSEC_IP_CONTROL bit fields
  * @{ */
@@ -256,9 +244,7 @@
 	 DWC_MACSEC_CTRL_XPNSEL)
 /** @} */
 
-/* ============================================================
- * SAI PRG register bit fields (shared for TX/RX)
- * ============================================================ */
+/* SAI PRG register bit fields (shared for TX/RX) */
 
 /** @addtogroup SAI_PRG bit fields
  * @{ */
@@ -285,9 +271,7 @@
 #define DWC_MACSEC_TX_SAI_VLAN_WILD_SHIFT	23
 /** @} */
 
-/* ============================================================
- * SAD PRG register bit fields (shared for TX/RX)
- * ============================================================ */
+/* SAD PRG register bit fields (shared for TX/RX) */
 
 /** @addtogroup SAD_PRG bit fields
  * @{ */
@@ -296,10 +280,7 @@
 #define DWC_MACSEC_SAD_PRG_ENTRY_SHIFT		1
 /** @} */
 
-/* ============================================================
- * TX_SAD_0_LOW (0xD4): PN_OR_SSCI (31:0)
- * TX_SAD_0_HIGH (0xD8) bit fields
- * ============================================================ */
+/* TX_SAD_0_LOW (0xD4) / TX_SAD_0_HIGH (0xD8) bit fields */
 
 /** @addtogroup TX_SAD_0_HIGH bit fields (0xD8)
  * Bit layout: [31]ACTIVE [27:21]OFFSET [6:2]TCI{ES,SC,SCB,E,C} [1]AN_HI
@@ -325,10 +306,7 @@
 #define DWC_MACSEC_TX_SAD1H_MTU_SHIFT		0
 #define DWC_MACSEC_TX_SAD1H_MTU_MASK		0x3FFFU
 
-/* ============================================================
- * TX SAD XPN fields (0xE4-0xF0)
- * Used when DWC_MACSEC_CTRL_XPNSEL is set in IP_CONTROL.
- * ============================================================ */
+/* TX SAD XPN fields (0xE4-0xF0) */
 
 /** @addtogroup TX SAD XPN fields
  * TX_SAD_2_LOW  (0xE4): SSCI[31:0]
@@ -341,9 +319,7 @@
 #define DWC_MACSEC_TX_SAD3H_XPN_CIPHER		OSI_BIT(0)
 /** @} */
 
-/* ============================================================
- * RX_SAD_0_HIGH (0x104) bit fields
- * ============================================================ */
+/* RX_SAD_0_HIGH (0x104) bit fields */
 
 /** @addtogroup RX_SAD_0_HIGH bit fields (0x104)
  * Bit layout: [31]ACTIVE [30]REPLAY [29]USED [28:27]VALIDATE [26:20]OFFSET [15:0]PORT_ID
@@ -362,15 +338,13 @@
 #define DWC_MACSEC_RX_SAD0H_PORT_ID_MASK	0xFFFFU
 /** @} */
 
-/* ============================================================
+/*
  * RX SAD XPN fields (0x108-0x114)
- * Used when DWC_MACSEC_CTRL_XPNSEL is set in IP_CONTROL.
- *
- * RX_SAD_1_LOW  (0x108): LOWEST_PN_HI[31:0] (upper 32 bits of lowest PN)
+ * RX_SAD_1_LOW  (0x108): LOWEST_PN_HI[31:0]
  * RX_SAD_1_HIGH (0x10C): SSCI[31:0]
  * RX_SAD_2_LOW  (0x110): SSCI[63:32]
- * RX_SAD_2_HIGH (0x114): [31:17]reserved [16]XPN_CIPHER [15:0]SALT_IDX
- * ============================================================ */
+ * RX_SAD_2_HIGH (0x114): [31:17]res [16]XPN_CIPHER [15:0]SALT_IDX
+ */
 
 /** @addtogroup RX SAD XPN fields
  * @{ */
@@ -379,28 +353,17 @@
 #define DWC_MACSEC_RX_SAD2H_XPN_CIPHER		OSI_BIT(16)
 /** @} */
 
-/* ============================================================
- * PG (Page Guard/Busy) register bit field
- * ============================================================ */
+/* PG (Page Guard/Busy) register bit field */
 
 #define DWC_MACSEC_PG_BUSY			OSI_BIT(0)
 
-/* ============================================================
- * DATA_FETCH register bit field
- * ============================================================ */
+/* DATA_FETCH register bit field */
 
 #define DWC_MACSEC_DATA_FETCH_READY		OSI_BIT(0)
 
-/* ============================================================
- * TX_ACTIVE_AN (0x60) register
- * One bit per SC: 0 = SA0 active, 1 = SA1 active
- * ============================================================ */
+/* TX_ACTIVE_AN (0x60): bit i = active SA for SC i (0 or 1) */
 
-/* TX_ACTIVE_AN bitmap: bit i = active SA for SC i (0 or 1) */
-
-/* ============================================================
- * MIB_CMD register (0x64) bit fields
- * ============================================================ */
+/* MIB_CMD register (0x64) bit fields */
 
 /** @addtogroup MIB_CMD bit fields
  * @{ */
@@ -419,9 +382,7 @@
 /** MIB_CMD_STAT busy bit */
 #define DWC_MACSEC_MIB_CMD_STAT_BUSY		OSI_BIT(0)
 
-/* ============================================================
- * MIB Counter IDs (CTR_ID values for MIB_CMD)
- * ============================================================ */
+/* MIB Counter IDs (CTR_ID values for MIB_CMD) */
 
 /** @addtogroup TX MIB Counter IDs
  * @{ */
@@ -463,23 +424,19 @@
 #define DWC_MIB_RX_UNUSED_SA_PKTS_SA		0x44U
 /** @} */
 
-/* ============================================================
+/*
  * MIB_VALIDATE register (0x6C) bit fields
- * PHY_MAP[0]: default VALIDATE_FRAMES for SA lookup miss
+ * PHY_MAP[0]: default VALIDATE_FRAMES for SA lookup miss:
  *   0 = disabled/check (non-MACsec frames pass through)
  *   1 = strict (non-MACsec frames are poisoned)
- * Per manual 1.8.1: do NOT set during initial setup.
- * ============================================================ */
+ */
 
 #define DWC_MACSEC_MIB_VALIDATE_PHY_MAP_SHIFT	0
 #define DWC_MACSEC_MIB_VALIDATE_PHY_MAP_MASK	0x1U
 #define DWC_MACSEC_MIB_VALIDATE_NOT_STRICT	0x0U
 #define DWC_MACSEC_MIB_VALIDATE_STRICT		0x1U
 
-/* ============================================================
- * IRQ_GLBL_EN (0x178) and IRQ_GLBL_STAT (0x17C) bit fields
- * 16 interrupt enable/status bits
- * ============================================================ */
+/* IRQ_GLBL_EN (0x178) and IRQ_GLBL_STAT (0x17C) bit fields */
 
 /** @addtogroup DWC_MACSEC IRQ_GLBL_EN (0x178) / IRQ_GLBL_STAT (0x17C)
  * 16 global error interrupt bits (NOT per-SA). W1C for STAT.
@@ -528,11 +485,7 @@
 #define DWC_MACSEC_IRQ_RX_SA_ALL		0x7FU
 /** @} */
 
-/* ============================================================
- * AES Key Table APB registers (DWC_macsec_uaes_gcmp_apb)
- * Accessed via osi_core->tz_base (separate APB interface)
- * Databook section 6.2
- * ============================================================ */
+/* AES Key Table APB registers (via osi_core->tz_base) */
 
 /** @addtogroup AES APB register offsets (via tz_base)
  * @{ */
@@ -551,11 +504,7 @@
 #define DWC_AES_BIST_VECT_CTL		0x2AC
 /** @} */
 
-/* ============================================================
- * AES IRQ_EN (0x08) and IRQ_STAT (0x0C) bit fields
- * Databook 6.2.1 / 6.2.2
- * IRQ_STAT is W1C (write-1-to-clear).
- * ============================================================ */
+/* AES IRQ_EN (0x08) and IRQ_STAT (0x0C) bit fields (W1C) */
 
 /** @addtogroup DWC_AES_IRQ bit fields
  * @{ */
@@ -574,7 +523,7 @@
 /** @} */
 
 /** @addtogroup DWC_AES_CONFIG bit fields (0x10)
- * Databook 6.2.3 ?? all fields are read-only HW configuration
+ * Databook 6.2.3: Read-only HW configuration
  * @{ */
 #define DWC_AES_CONFIG_NUM_CTX_SHIFT	15
 #define DWC_AES_CONFIG_NUM_CTX_MASK	(0x1FFFFU << 15)
@@ -603,7 +552,7 @@
 /** @} */
 
 /** @addtogroup DWC_AES_STAT bit fields (0x18)
- * Databook 6.2.5 ?? only BUSY bit
+ * Databook 6.2.5: Status bit
  * @{ */
 #define DWC_AES_STAT_BUSY		OSI_BIT(0)
 /** @} */
@@ -616,14 +565,14 @@
 /** @} */
 
 /** @addtogroup DWC_AES_FIPS_SELF_TEST_CTL bit fields (0x50)
- * Databook 6.2.15 ?? Exists when DWC_MACSEC_AES_FIPS_EN==1
+ * Databook 6.2.15: Valid when DWC_MACSEC_AES_FIPS_EN==1
  * @{ */
 #define DWC_AES_FIPS_CTL_CHECK		OSI_BIT(1)
 #define DWC_AES_FIPS_CTL_ENA		OSI_BIT(0)
 /** @} */
 
 /** @addtogroup DWC_AES_FIPS_SELF_TEST_STAT bit fields (0x58)
- * Databook 6.2.17 ?? all W1C
+ * Databook 6.2.17: Status bits (W1C)
  * @{ */
 #define DWC_AES_FIPS_STAT_FAIL_CAUSE_MASK	(0x7FU << 4)
 #define DWC_AES_FIPS_STAT_MAC_MATCH_RES		OSI_BIT(2)
@@ -659,19 +608,12 @@
 /** Number of 32-bit key data registers (KEY_0 through KEY_7) */
 #define DWC_AES_KEY_REG_CNT		8U
 
-/* ============================================================
- * Compatibility macros
- * Keep existing Omni macro names that are referenced widely
- * in the codebase, mapped to DWC_macsec equivalents
- * ============================================================ */
+/* Compatibility macros */
 
-/* ============================================================
+/*
  * ETH Subsystem CSR registers (CSR_BASE + offset)
- *
- * These registers are in the ETH subsystem CSR module, NOT inside
- * the MACsec IP itself.  They control MACsec clock-gate, reset,
- * SRAM zeroization, and sideband lock signals.
- * ============================================================ */
+ * Control MACsec clock gating, reset, SRAM zeroization, and sideband locks.
+ */
 
 /** @addtogroup ETH_CSR MACsec-related control registers
  * @{ */
@@ -707,7 +649,7 @@
 #define MACSEC_TX_EN			DWC_MACSEC_CTRL_TX_BYPASS
 #define MACSEC_RX_EN			DWC_MACSEC_CTRL_RX_BYPASS
 
-/* Shared utility macros from old macsec.h preserved here */
+/* Utility macros */
 #define MAX_U64_VAL			0xFFFFFFFFFFFFFFFFU
 #define CERT_C__POST_INC__U64(a)\
 	{\
@@ -722,7 +664,6 @@
 #define HKEY2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5], (a)[6], (a)[7], (a)[8], (a)[9], (a)[10], (a)[11], (a)[12], (a)[13], (a)[14], (a)[15]
 #define HKEYSTR "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x"
 #define KEY2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5], (a)[6], (a)[7], (a)[8], (a)[9], (a)[10], (a)[11], (a)[12], (a)[13], (a)[14], (a)[15]
-//#define KEYSTR "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x"
 #endif /* DEBUG_MACSEC */
 
 #endif /* INCLUDED_DWC_MACSEC_REG_H */
